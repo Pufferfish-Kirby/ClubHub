@@ -28,13 +28,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from html import unescape
 
 from bs4 import BeautifulSoup
 
 from app.config import settings
-from app.services.event_sources.base import CAMPUS_TZ, ScrapedEvent, safe_console
+from app.services.event_sources.base import ScrapedEvent, safe_console
+from app.timeutil import as_utc, local_to_utc
 
 SOURCE_NAME = "sop"
 
@@ -82,27 +83,25 @@ def _strip_html(raw: str | None) -> str | None:
 
 
 def _parse_utc(value: str | None) -> datetime | None:
-    """"2026-09-24 23:00:00" (already UTC) -> naive UTC datetime."""
+    """"2026-09-24 23:00:00" (already UTC) -> aware UTC datetime."""
     if not value:
         return None
     try:
         parsed = datetime.fromisoformat(value.strip().replace(" ", "T"))
     except ValueError:
         return None
-    return parsed.replace(tzinfo=None)
+    return as_utc(parsed)
 
 
 def _parse_local(value: str | None) -> datetime | None:
-    """Fallback for records missing the UTC fields: local Toronto -> naive UTC."""
+    """Fallback for records missing the UTC fields: local campus time -> aware UTC."""
     if not value:
         return None
     try:
         parsed = datetime.fromisoformat(value.strip().replace(" ", "T"))
     except ValueError:
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=CAMPUS_TZ)
-    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return local_to_utc(parsed)
 
 
 def _club_name(record: dict) -> str | None:

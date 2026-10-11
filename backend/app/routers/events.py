@@ -8,6 +8,7 @@ from app.database import get_session
 from app.models import Event
 from app.schemas import PublicEvent
 from app.services.extraction import to_utc
+from app.timeutil import as_utc
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -21,7 +22,7 @@ def list_events(since: datetime | None = None, session: Session = Depends(get_se
     """
     query = select(Event).where(Event.status == "published")
     if since:
-        query = query.where(Event.start >= since)
+        query = query.where(Event.start >= as_utc(since))
     return session.exec(query.order_by(Event.start)).all()
 
 

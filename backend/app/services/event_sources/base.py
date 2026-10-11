@@ -62,9 +62,9 @@ def safe_console() -> None:
 class ScrapedEvent:
     """One future event read off an external source, times already in UTC.
 
-    `start` is naive UTC, matching `Event.start` and what `extraction.to_utc()`
-    returns -- not a local time and not tz-aware. Passing a local time through
-    here shifts every event by 4-5 hours, which is the kind of bug that only
+    `start` is timezone-aware UTC, matching `Event.start` and what
+    `extraction.to_utc()` returns -- not a local time and not naive. Passing a
+    local time through here shifts every event by 4-5 hours, which is the kind of bug that only
     shows up as "the 7pm event says 3pm" during a demo.
 
     `confidence` mirrors the field extraction sets, so the same publish gate can
@@ -75,7 +75,7 @@ class ScrapedEvent:
 
     title: str
     club_name_guess: str
-    start: datetime | None  # naive UTC
+    start: datetime | None  # aware UTC
     end: datetime | None = None
     location: str | None = None
     description: str | None = None

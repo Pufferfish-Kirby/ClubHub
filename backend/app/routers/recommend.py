@@ -14,7 +14,6 @@ itself. The rerank supplies the judgement and the sentence.
 
 import asyncio
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -23,6 +22,7 @@ from app.database import get_session
 from app.models import Club, Event
 from app.schemas import ClubMatch, EventLite, RecommendRequest, RecommendResponse
 from app.services import embeddings, reranker
+from app.timeutil import utc_now
 
 router = APIRouter(tags=["recommend"])
 
@@ -55,7 +55,7 @@ def _next_events(session: Session, club_ids: list[str]) -> dict[str, Event]:
             Event.club_id.in_(club_ids),
             Event.status == "published",
             Event.start.is_not(None),
-            Event.start >= datetime.utcnow(),
+            Event.start >= utc_now(),
         )
         .order_by(Event.start)
     ).all()
