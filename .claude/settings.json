@@ -1,0 +1,32 @@
+{
+  "env": {
+    "DROPBOX_WATCHER_ENABLED": "0",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./backend/.env)",
+      "Read(./frontend/.env)",
+      "Bash(python -m app.services.sop_sync:*)",
+      "Bash(python -m app.services.enrichment_batch:*)",
+      "Bash(.venv/bin/python -m app.services.sop_sync:*)",
+      "Bash(.venv/bin/python -m app.services.enrichment_batch:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push --force:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/cloud_setup.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

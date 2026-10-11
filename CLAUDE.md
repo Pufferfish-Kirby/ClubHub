@@ -1,255 +1,220 @@
 # CLAUDE.md
 
-Guidance for Claude Code (and future contributors) working in this repo.
+Read this first, every session. It tells you what ClubHub is, how James wants you to
+work, and the rules that come from real incidents. `AGENTS.md` points here, so this is
+the only copy. Keep it that way.
 
 ## What this is
 
-**Campus Compass** — a hackathon (24h) "StudentOS for Clubs" project. Full original
-brainstorming spec lives at [`central-hub-for-clubs.md`](./central-hub-for-clubs.md);
-this file is the condensed, code-facing version. Two things it does:
+**ClubHub** helps a student find the campus clubs that fit them. They type what they
+want out of university in plain English and get 5-8 ranked clubs, each with a reason,
+drawn as a small personal star graph (you → outcomes → clubs → next events). Clubs can
+also drop a poster into Dropbox (or upload it in the app), and it turns into a live
+event.
 
-1. **Match**: student types a free-text blurb ("first-year CS, want internships and
-   friends, not too intense") -> 5-8 ranked clubs with a "why this fits you" line,
-   rendered as a small personal graph (you -> outcomes -> clubs -> next events).
-2. **Dropbox drop-to-update**: a club drops a poster/PDF into a shared Dropbox folder;
-   Claude extracts event details; it appears in the app live with a "from Dropbox"
-   badge and a provenance link back to the source file.
+It started as a 24h HackMIT build (2nd place, Dropbox challenge). It is now a
+**long-term project maintained by James** (GitHub: `Pufferfish-Kirby`), forked from the
+team repo `hdave07/ClubHub`. The pilot is the University of Toronto, St. George campus.
+The goal is for UofT, and later other schools, to actually use it. That makes
+**reliability and data quality matter more than feature count**. A club that shows the
+wrong date, or a page that's down, costs more trust than a missing feature earns.
 
-The demo is **three flows working flawlessly** (SOP sync, match, Dropbox
-drop-to-update). Everything else — auth, notifications, Instagram scraping, multi-campus
-— is roadmap only. Don't build it.
+Background docs: `README.md` (product + quickstart), `DECISIONS.md` (why things are the
+way they are, and who decided), `central-hub-for-clubs.md` (original brainstorm).
+
+## How James works with you
+
+James mostly works from his phone, between lectures. You run as a cloud session and
+he checks in when he can. Optimize for that.
+
+1. **One issue → one branch → one PR.** Branch from `main` as `claude/<short-topic>`.
+   Never push to `main`. Never merge your own PR. James reviews and merges every change.
+2. **Keep PRs small enough to review on a phone**: aim under ~300 changed lines,
+   excluding lockfiles. If the task is bigger, ship the first slice and list the rest
+   under "Follow-ups" in the PR description.
+3. **When a real choice comes up, stop and ask.** "Real choice" means: product
+   behavior a student would notice, anything touching data that's already in the DB,
+   adding a dependency or service, anything that costs money, or anything on the
+   "ask first" list below. Ask in the session as one question with 2-3 labelled options
+   and your recommendation first. Don't stop for things a sensible default covers;
+   pick the default and say so in the PR.
+4. **Every PR description uses this template:**
+
+   ```markdown
+   ## What changed
+   2-4 bullets, plain language.
+
+   ## Why
+   The issue (link it: Closes #N) and the root cause, if this is a fix.
+
+   ## How I verified it
+   Exact commands run and their result. Say plainly what you could NOT verify
+   (e.g. "didn't hit the real Voyage API").
+
+   ## Decisions I made
+   Any default you picked without asking, so James can overrule it.
+
+   ## Worth understanding
+   The one concept from this change that matters most (a library behavior, a design
+   pattern, why the bug happened), in 3-5 plain sentences, plus the file and line
+   where it lives.
+   ```
+
+   "Worth understanding" is not optional. James reviews PRs partly to learn the
+   codebase, and he has to be able to explain every merged change himself.
+5. **Before opening the PR, run the checks** (Commands, below) and make sure they pass.
+   If a check was already failing on `main` before your change, say so instead of
+   hiding it, and don't widen the PR to fix it unless the issue asks.
+6. **Keep this file true.** If your change makes something here wrong (a command, a
+   "Known state" line, a constraint), update it in the same PR. Record a new product
+   or architecture decision in `DECISIONS.md` (owner `James` if he made the call).
+
+### Ask first, always
+
+Don't start any of these without James saying yes in the session or in the issue:
+
+- Accounts / auth, notifications, or anything storing student personal data
+- Scraping Instagram, Discord or LinkedIn (their terms forbid it and accounts get
+  blocked; the poster-drop flow exists to get that info with consent instead)
+- Adding a new school or campus
+- Changing the database engine, hosting, or deploy config (`vercel.json`, Render)
+- Editing `FIXED_TAGS` or `FIXED_OUTCOMES` (forces a re-enrichment run that costs money)
+- Changing `backend/data/campus_compass.db` or `backend/data/chroma/` contents
+- Deleting files or features
+
+## Safety rules for cloud sessions
+
+Cloud sessions have **no real API keys** on purpose. Work that needs Anthropic, Voyage
+or Dropbox credentials is James's job on his own machine.
+
+- **Never run these in a cloud session.** They hit real APIs, cost money, and write to
+  the checked-in database:
+  `app.services.sop_sync`, `app.services.enrichment_batch`, and every service's
+  `python -m app.services.<name>` smoke test (`dropbox_store`, `extraction`, `matcher`,
+  `ingest`, `dropbox_watcher`). These are **not** unit tests. If a task needs one, write
+  the code, then put the exact command for James in the PR under "How I verified it".
+- Unit tests must not touch the network. Stub external calls the way
+  `tests/test_ingest_dates.py` does.
+- Never commit a real `.env`. The pre-commit hook in `.githooks/` blocks it
+  (`git config core.hooksPath .githooks` once per clone). Keys have leaked from this
+  repo before.
+- `DROPBOX_WATCHER_ENABLED=0` is set for you in `.claude/settings.json`. Leave it off;
+  otherwise every reload re-scans the inbox and spends Claude calls.
+
+## Commands
+
+Cloud sessions are Linux. The SessionStart hook (`scripts/cloud_setup.sh`) creates
+`backend/.venv` and installs frontend packages before you start.
+
+```bash
+# backend: run from backend/
+.venv/bin/python -m pytest -q                       # unit tests, no network
+.venv/bin/uvicorn app.main:app --port 8000           # API (only if a task needs it)
+
+# frontend: run from frontend/
+npm run lint                                         # oxlint
+npm run build                                        # must pass before a PR
+npm run dev                                          # proxies /api -> localhost:8000
+```
+
+CI (`.github/workflows/ci.yml`) runs the same tests, lint and build on every PR.
+
+James develops locally on **Windows / PowerShell 5.1**: no `&&` (use `;`), activate the
+venv with `.venv\Scripts\Activate.ps1`. When a PR includes commands for him to run,
+write them in PowerShell form.
+
+Real-API scripts, for James to run locally (venv active, `.env` filled in):
+
+```powershell
+python -m app.services.sop_sync --discover-only     # dry run
+python -m app.services.sop_sync --limit 250          # sync clubs (resumable)
+python -m app.services.enrichment_batch --limit 25   # enrich (Haiku) + embed (Voyage)
+python -m app.services.enrichment_batch --index-only # re-embed only, no Claude calls
+python -m app.services.enrichment_batch --stale-tags # after a FIXED_TAGS change
+```
 
 ## Repo layout
 
 ```
-frontend/   React + Vite + JavaScript (JSX), Tailwind v4 (via @tailwindcss/vite), @xyflow/react
-backend/    FastAPI + SQLModel (SQLite) + ChromaDB + Anthropic SDK + Dropbox SDK
+frontend/   React 19 + Vite, plain JavaScript/JSX (no TypeScript), Tailwind v4 via
+            @tailwindcss/vite, @xyflow/react for the graph.
+            src/screens = pages, src/components = graph/cards/panels,
+            src/lib = API client (api.js), filtering, physics, layout math.
+backend/    FastAPI + SQLModel (SQLite) + ChromaDB + Anthropic SDK + Voyage + Dropbox SDK.
+            app/routers = /api/recommend, /api/clubs, /api/events, /api/upload
+            app/services = sync, enrichment, embeddings, Dropbox, extraction, matching,
+            event_sources/ (pluggable event adapters, see REGISTRY.md)
+.agents/skills/scraping-club-events/  skill for adding event-source adapters
+            (.cursor/skills/ holds an identical copy for Cursor users)
 ```
 
-Current state: **backend mostly built, frontend in progress.** `sop_sync`,
-`enrichment`, `enrichment_batch`, `embeddings`, `dropbox_store`, `dropbox_watcher`,
-`extraction`, `matcher`, and `ingest` are all implemented. What's still open:
+Extend `frontend/src/lib/api.js` instead of writing fetch calls elsewhere.
 
-- **`POST /api/recommend` is implemented** (`app/routers/recommend.py`):
-  `embeddings.query_clubs()` for the ~20 nearest candidates, then
-  `app/services/reranker.py` (Sonnet, forced tool use) narrows to 5-8 and writes a
-  "why it fits" line per club, plus the student's own outcomes for the graph's
-  middle layer.
-- **The frontend graph is actively being built** — coordinate before editing
-  `frontend/src/`.
-- The Dropbox pipeline is written but **has not yet run end to end** — `ingestlog` and
-  `event` are both empty, so treat that flow as unproven until you see rows.
-- SQLite is synced with a 250-club sample, drawn from the 897 unique St. George clubs
-  (1,309 groups campus-wide). Most rows are **not enriched yet** — check coverage with
-  query #3 in `backend/data/validation_queries.sql`, close the gap with
-  `enrichment_batch`. Match results stay thin and repetitive until that runs.
+## How it works
 
-## Commands
+Two ingestion paths write to the same tables, tagged by `source` (`sop` | `dropbox`):
 
-Dev happens on Windows. **PowerShell 5.1 has no `&&`** — chain with `;` or just run
-these as separate lines. Every `python -m` below assumes the venv is already active.
+1. **Portal sync**: `sop_sync` pulls clubs from UofT's SOP WordPress API → dedupe →
+   SQLite. `enrichment` (Haiku) adds summary, outcomes, tags, commitment.
+   `embeddings` (Voyage `voyage-4-lite`, 1024 dims) → ChromaDB.
+2. **Posters**: `dropbox_watcher` / `POST /upload` → `extraction` (Sonnet, vision/PDF)
+   → `matcher` (rapidfuzz club-name match) → `Event` rows with a provenance link.
 
-A `ModuleNotFoundError` means the venv is behind `requirements.txt`, not that the code
-is wrong — `pip install -r requirements.txt` first. Only `sop_sync` runs without the
-heavy deps; `app.main` imports `dropbox` transitively and won't even start without them.
+`POST /recommend`: Voyage query embedding → ~20 nearest clubs from Chroma → Sonnet
+reranker (`services/reranker.py`, forced tool use) keeps 5-8 and writes a "why it fits"
+line each, mapped to `FIXED_OUTCOMES`.
 
-```powershell
-# backend
-cd backend
-.venv\Scripts\Activate.ps1                    # macOS/Linux: source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+Voyage has separate *document* and *query* embeddings: index with `embed_documents()`,
+search with `embed_query()`. Changing model or dimensions means re-indexing everything.
 
-# frontend (proxies /api -> localhost:8000, see frontend/vite.config.js)
-cd frontend
-npm run dev
-```
+## Hard constraints (each one came from a real incident, not style)
 
-**Working on the frontend? Turn the Dropbox poller off first.** It starts with the app,
-and `uvicorn --reload` restarts on every file save — each restart re-scans the inbox and
-spends Claude calls on it.
+- **Never expose event-organizer emails** in API responses or the UI. SOP event data
+  includes students' personal emails. **Club** contact emails (`Club.links.email`) ARE
+  shown on purpose: SOP publishes them as the club's official contact. Different
+  data paths, different rules.
+- **A wrong date is worse than no date.** Auto-publish an extracted event only with
+  title + resolved start + time of day + high confidence (`services/extraction.py`).
+  Everything else → `pending_review`. Always pass today's date and `America/Toronto`
+  into the extraction prompt; never let the model guess an ambiguous year.
+- **Never invent club facts.** Thin descriptions get "limited info" summaries.
+  `commitment` is `unknown` for ~40% of clubs because the prompt forbids guessing it.
+  Don't loosen that; the reranker judges intensity at query time.
+- **Tags come only from `FIXED_TAGS` (51 terms); outcomes only from `FIXED_OUTCOMES`
+  (8).** Free-form tags produced near-duplicate junk in the pilot. Every club needs at
+  least one outcome or it can't appear in the graph; `derive_outcomes_from_tags()` is
+  the fallback.
+- **`club_to_document()` embeds the summary AND the raw description.** Club-specific
+  words ("k-pop", "poker") only reach the vector through the description.
+- **The personal graph stays small** (~15-25 nodes). Never render the full catalog
+  as one graph.
+- **Dedupe before enrichment.** `copy-of-*` slugs are yearly re-listings; the dedupe
+  key is `sop_original_id` (SOP's `_oasis_original`).
+- **Filter campus by taxonomy slug** (`campus-st-george`), not `settings.sop_campus`.
+  The title-cased label has no period and silently matches zero rows.
+- **Sample across interest areas** (`select_diverse()`), never "first N".
+- **SOP etiquette:** call SOP only from one-off scripts with a real User-Agent and
+  throttling, never from a request handler.
+- **Adding a model column? Add it to `_COLUMN_MIGRATIONS` in `database.py` too.**
+  `create_all()` never alters existing tables, and the DB is checked into git.
+- **Dropbox uses the refresh-token flow** (`DROPBOX_REFRESH_TOKEN`), not a short-lived
+  access token.
 
-```powershell
-$env:DROPBOX_WATCHER_ENABLED = "0"            # bash: export DROPBOX_WATCHER_ENABLED=0
-```
+## Known state (update this when it changes)
 
-One-off pipeline scripts (never call these from a request handler):
+As of 2026-10-06:
 
-```powershell
-# SOP sync -> clubs in SQLite. Discovery is REST-only and cheap (~13 calls for the
-# whole catalog); the cost is the per-club HTML scrape at ~1s each, so sample first.
-python -m app.services.sop_sync --discover-only   # dry run: what would a --limit pull?
-python -m app.services.sop_sync --limit 250       # default; St. George only
-python -m app.services.sop_sync --targets-only    # just TARGET_GROUP_IDS -- fast path
-python -m app.services.sop_sync --all             # whole catalog, ~40-60 min
-python -m app.services.sop_sync --campus any      # drop the campus filter
-
-# enrich clubs (Haiku) + push embeddings to Chroma -- build step 2
-python -m app.services.enrichment_batch                  # default --limit 100
-python -m app.services.enrichment_batch --limit 25       # pilot first -- check tag quality
-python -m app.services.enrichment_batch --concurrency 6  # parallel Claude calls
-python -m app.services.enrichment_batch --index-only     # re-embed only, no Claude calls
-python -m app.services.enrichment_batch --force          # re-enrich first N clubs by name
-python -m app.services.enrichment_batch --stale-tags     # re-enrich rows on an old FIXED_TAGS
-python -m app.services.enrichment_batch --derive-outcomes # backfill empty outcomes from tags
-```
-
-Each service has a `_smoke_test()` on `__main__`. **They hit real APIs and write to the
-database** — they are not unit tests.
-
-```powershell
-python -m app.services.dropbox_store      # Dropbox auth + all four OAuth scopes
-python -m app.services.extraction         # file -> events JSON
-python -m app.services.matcher            # fuzzy club-name matching
-python -m app.services.ingest             # inbox -> Event rows, end to end
-python -m app.services.dropbox_watcher    # watches /Inbox for 60s -- drop a poster and watch it land
-```
-
-## Architecture
-
-Two ingestion pipelines write to the same tables — that's why `Club.source` /
-`Event.source` (`sop` | `dropbox`) matters everywhere.
-
-```mermaid
-flowchart TB
-    subgraph Sources
-        S1[SOP Groups API] --> I1
-        S2[SOP Events API] --> I1
-        S3[Dropbox Inbox folder] --> I2
-    end
-    subgraph Ingest
-        I1[sop_sync: fetch, dedupe, filter expired]
-        I2[dropbox_watcher: poll, download]
-        I3[enrichment (Haiku): summary, outcomes, tags]
-        I4[extraction (Sonnet): file -> events JSON]
-        I5[matcher: rapidfuzz name match]
-        I6[embeddings: Voyage -> Chroma]
-    end
-    I1 --> I3 --> DB[(SQLite)]
-    I3 --> I6 --> VDB[(ChromaDB)]
-    I2 --> I4 --> I5 --> DB
-    I5 --> I6
-    subgraph API [FastAPI]
-        A1[POST /recommend]
-        A2[GET /clubs/:id]
-        A3[GET /events]
-    end
-    A1 --> VDB
-    A1 --> DB
-    A2 --> DB
-    A3 --> DB
-```
-
-## Data model (`backend/app/models.py`)
-
-- `Club` — dedupe key is `sop_original_id` (from SOP's `_oasis_original` meta), not
-  `sop_id`. `outcomes` are 1-3 values from the **fixed 8-item list**
-  (`FIXED_OUTCOMES` in `models.py`) — never let the graph draw arbitrary outcome
-  labels, that's what keeps the personal graph small and legible. `tags` are 3-8 values
-  from `FIXED_TAGS` (~50 terms, same file) — see the tag-vocabulary constraint below.
-- `Event` — `status` is `published` or `pending_review`; see the safety rule below.
-- **Adding a column? Add it to `_COLUMN_MIGRATIONS` in `database.py` too.**
-  `SQLModel.metadata.create_all()` creates missing tables but never alters an existing
-  one, and `backend/data/campus_compass.db` is checked into git — so a teammate who
-  pulls a model change gets the old table and `no such column` on the next query.
-  `init_db()` applies those idempotent `ALTER TABLE`s at startup.
-- `IngestLog` — keyed on `(dropbox_file_id, content_hash)` so the watcher never
-  reprocesses the same file twice.
-
-## Hard constraints (from real incidents in the spec, not style preferences)
-
-- **Never display event-organizer emails.** SOP's event data includes students'
-  personal emails; they must not reach the frontend or API responses. This covers the
-  *event* path only — the organizer of an event did not publish their address as a
-  public contact point.
-- **Club contact emails ARE shown, on purpose.** `Club.links.email` is populated for
-  242/250 synced clubs, and ~28 of those are individual students' addresses
-  (`firstname.lastname@mail.utoronto.ca`) rather than role accounts. That's deliberate:
-  SOP publishes them as the club's official contact, and "how do I reach this club" is
-  the point of the product. Don't strip them to satisfy the rule above — it's a
-  different data path. Decided 2026-09-19.
-- **Auto-publish only if `title` + `start` are present AND confidence is high**
-  (`app/services/extraction.py`); otherwise the event goes to `pending_review`.
-  Wrong dates during the live demo are the single most likely failure mode — always
-  pass the *current* date into the extraction prompt and never let the model guess an
-  ambiguous year; push ambiguity into `uncertainties` instead.
-- **Dedupe before enrichment**, not after — `copy-of-*` slugs are yearly re-listings,
-  not new clubs. Collapse on `_oasis_original`, then fuzzy-match leftovers.
-- **Thin descriptions get "limited info" summaries**, never invented detail. The
-  enrichment prompt explicitly forbids inventing facts not in the source text. This is
-  also why `commitment` is `unknown` for ~40% of clubs — the prompt forbids inferring
-  it. Don't "fix" that by loosening the rule; let the Sonnet reranker judge intensity
-  at query time, where it has the student's blurb for context.
-- **Tags come from `FIXED_TAGS`, and a tag is a classification, not a claim.** That's
-  the one place enrichment is allowed to be less literal than the source. Measured on a
-  25-club pilot, free-form tags produced 148 unique tags across 177 assignments (14%
-  reused, near-duplicates like `academic` / `academic inquiry` / `academic support`);
-  the controlled enum gives 45 unique across 187 (71% reused). If you edit `FIXED_TAGS`,
-  run `enrichment_batch --stale-tags` — `--force` re-runs the first N clubs *by name*
-  and silently strands rows late in the alphabet.
-- **`club_to_document()` embeds the summary AND the raw description**, not one or the
-  other. Tags no longer carry club-specific words, so "k-pop", "poker" and "symphonic
-  band" reach the vector only through the description. Dropping it on enriched clubs
-  would strip out exactly the terms students search by.
-- **The personal graph is always small** (~15-25 nodes: you, ~3 outcomes, 5-8 clubs,
-  next events). Never render the full club graph (hairball of ~1,250 nodes).
-- **Every club must carry at least one outcome**, or it has no edge in the
-  you -> outcomes -> clubs graph and can never be drawn. Thin listings legitimately come
-  back from Claude with none (14 of 250 did), so `_normalise_payload` falls back to
-  `derive_outcomes_from_tags()` (`models.py`) and sets `Club.outcomes_derived`. The
-  fallback never overrides outcomes the model actually assigned. Deriving from tags
-  rather than `sop_interest_areas` is deliberate: 2 of those 14 had no SOP areas at all,
-  but every club in the catalog has at least one tag.
-- **SOP etiquette**: `sop_sync.py` runs as a one-off script with a real User-Agent and
-  throttling — never call SOP's API from a per-request code path.
-- **Filter campus by taxonomy *slug*, not `settings.sop_campus`.** `class_list` carries
-  `campus-st-george`, which `_parse_taxonomy_tags()` title-cases to `"St George"` — no
-  period — so comparing against `settings.sop_campus` (`"St. George"`) silently matches
-  zero rows. Measured 2026-09-19: 1,309 groups total, 897 on St. George after dedupe.
-- **Sample across interest areas, never the first N.** `select_diverse()` allocates each
-  area its proportional share with a floor (`MIN_PER_AREA`). Plain round-robin looks
-  fairer but starves `academic` — half the catalog, and the target of the demo's own
-  example blurb; taking the first N instead just inherits alphabetical order.
-- **Dropbox tokens**: use the refresh-token (offline access) flow
-  (`DROPBOX_REFRESH_TOKEN` in `.env`), not a raw short-lived access token — it will
-  expire mid-demo otherwise.
-
-## Claude usage
-
-- **Enrichment** (`app/services/enrichment.py`) — Haiku, tool-use/JSON schema
-  (`ENRICHMENT_TOOL_SCHEMA`), one club at a time, bulk/async for the full run.
-- **Extraction** (`app/services/extraction.py`) — Sonnet, vision for images / native
-  PDF input, tool-use schema (`EXTRACTION_TOOL_SCHEMA`), always includes today's date
-  and `America/Toronto` in the prompt.
-- **Rerank + "why it fits"** (`app/routers/recommend.py`, not yet implemented) —
-  Sonnet, given the blurb + ~20 vector-search candidates, returns 5-8 ranked clubs
-  mapped to `FIXED_OUTCOMES` with a one-line rationale each.
-
-No embeddings API from Anthropic — embeddings come from **Voyage AI**
-(`voyage-4-lite`, 1024 dims, `VOYAGE_API_KEY`) via `app/services/embeddings.py`, stored
-in ChromaDB (`backend/data/chroma/`, gitignored) under the `club_embeddings_voyage` /
-`event_embeddings_voyage` collections. Voyage distinguishes *document* from *query*
-embeddings and they are not interchangeable: index with `embed_documents()`, search a
-student blurb with `embed_query()`. Changing the model or dimensions means re-indexing
-every record — the existing collections can't be mixed with vectors from another model.
-
-## Build order (see original spec's 24h timeline for the full version)
-
-1. SOP sync + dedupe -> SQLite (`app/services/sop_sync.py`)
-2. Enrichment (pilot ~100 clubs, then the rest) + embeddings to Chroma
-3. `POST /recommend` — vector search, then Claude rerank + why
-4. Dropbox watcher -> extraction -> matcher -> `Event` rows with provenance
-5. Wire the frontend graph (`@xyflow/react`, already installed) to real
-   `/recommend` output; club detail panel
-6. Feature freeze, then polish (loading/empty/error states) and demo rehearsal
-
-## Frontend notes
-
-- Plain JavaScript/JSX, not TypeScript — no `.ts`/`.tsx`, no type-checking step.
-- Tailwind v4 is wired via the `@tailwindcss/vite` plugin (`frontend/vite.config.js`) —
-  no `tailwind.config.js`/PostCSS config needed; utility classes just work once
-  `@import "tailwindcss";` is in `src/index.css`.
-- `@xyflow/react` is installed for the personal graph view but not yet wired up
-  (the spec allows swapping to `react-force-graph-2d` for a more Obsidian-like force
-  layout if React Flow's layout gets messy — pick one early, don't build both).
-- `src/lib/api.js` has the `recommend()` client; extend this file rather than
-  hand-rolling fetch calls elsewhere.
+- **Backend tests fail on a fresh install (7 of 15).** `requirements.txt` is unpinned,
+  and newer SQLModel versions (0.0.46+) reject naive datetimes. The code still uses
+  `datetime.utcnow()` in `models.py`, `sop_sync.py` and `recommend.py`. Passes on
+  SQLModel 0.0.44. Production is at risk on its next redeploy for the same reason.
+- **Deployment belongs to a teammate** (Vercel frontend; `vercel.json` rewrites `/api`
+  to a Render backend). The fork has no deployment of its own yet.
+- **Render's free tier has no persistent disk**, so SQLite and Chroma ship inside git
+  and anything written at runtime (uploaded posters, confirmed events) is lost on
+  restart or redeploy.
+- **Catalog covers 250 of 897** St. George clubs (sampled, 100% enriched).
+- `GET /api/clubs/{id}` returns `similar: []`; it's a TODO in `routers/clubs.py`.
+- Frontend main bundle is ~609 kB (Vite warns above 500 kB). Lint has 3 warnings.
+- No review screen for posters dropped straight into Dropbox with nobody there to
+  confirm an ambiguous date (the in-app upload has one).
