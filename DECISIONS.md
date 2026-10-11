@@ -242,6 +242,54 @@ still has to read correctly on stage.
 
 ---
 
+## 2026-10-11 — Time handling
+
+### D13. Store UTC, read and show in the school's zone
+**Owner:** James · **Status:** active
+
+Every datetime is timezone-aware UTC in the database and between services
+(`app/timeutil.py`). The school's zone is one setting, `school_timezone`
+(default `America/Toronto`), used only to interpret wall-clock times from posters and
+SOP and to show times to students.
+
+**Why:** SQLModel 0.0.46+ rejects naive datetimes on write, which broke 7 of 15 tests
+on a fresh install. The old code did `astimezone(utc).replace(tzinfo=None)` to match
+the naive column. Aware UTC is also what makes a second school in another zone possible
+without ambiguity.
+
+**An IANA name, not "EST":** Toronto is UTC-5 in winter and UTC-4 in summer. A fixed
+EST offset would put every event from March to November an hour off.
+
+**Existing data is untouched.** Old rows are naive UTC text; SQLModel reads them back as
+aware UTC, and `tests/test_timeutil.py` pins that behavior. No migration was needed.
+
+**Not done yet:** the frontend still hardcodes `America/Toronto` in `format.js`. That
+needs to come from the API once a second school exists.
+
+**Rejected:** rewriting stored values with an explicit offset (touches the checked-in
+DB for no behavior change); a per-school timezone column (a schema change, and adding a
+school is ask-first).
+
+---
+
+### D14. Pin backend dependencies to exact versions
+**Owner:** James · **Status:** active
+
+`requirements.txt` uses `==` pins, set to the versions the test suite passes on.
+
+**Why:** unpinned, the resolver can hand a fresh install or a redeploy a different
+SQLModel than the code was written against. That is how D13's bug arrived: it only
+showed up where 0.0.46+ resolved, and it passed on the same machine with 0.0.44.
+Production (Render) rebuilds from this file, so it had the same exposure.
+
+**To upgrade:** bump a pin on purpose, run `pytest`, and say so in the PR. Don't
+loosen to ranges. `pytest` stays out of the file (CI and the cloud setup script add it).
+
+**Rejected:** a lockfile (pip-tools/uv) for now. It would pin transitive packages too,
+but adds a tool and a workflow step; revisit if a transitive bump ever bites.
+
+---
+
 ## Accomplishments (verified 2026-09-19)
 
 Measured results the decisions above actually produced — the "accomplishments" raw
@@ -309,6 +357,18 @@ the same unverified-path risk.
 the demo, to confirm extraction, club matching, and the provenance link all work. The
 original spec already flags wrong-date extraction as the single most likely live-demo
 failure mode — this is that risk, still unretired.
+
+---
+
+### O4. `POST /api/events/{id}/confirm` has no authentication
+Anyone who knows an event ID can overwrite its start time and publish it, and the
+response returns the raw `Event` row (including internal `confidence`). Found by the
+automated security review on the D13 change; the behavior predates it.
+
+**Needs:** a decision, because the fix is on the ask-first list (accounts/auth or a
+per-upload token). Suggested shape: a one-time confirm token created at upload and checked
+with `hmac.compare_digest`, a `409` unless the event is `pending_review`, and a
+`PublicEvent` response.
 
 ---
 

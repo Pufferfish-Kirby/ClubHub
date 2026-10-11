@@ -34,6 +34,7 @@ from sqlmodel import Session, select
 from app.config import settings
 from app.database import engine, init_db
 from app.models import Club
+from app.timeutil import as_utc, utc_now
 
 HEADERS = {"User-Agent": settings.sop_user_agent}
 
@@ -159,11 +160,21 @@ def _slugs(record: dict, prefix: str) -> list[str]:
     return [c[len(prefix):] for c in record.get("class_list", []) if c.startswith(prefix)]
 
 
+def _parse_expiry(raw: str) -> datetime:
+    """SOP's "_expiration-date" string -> aware UTC.
+
+    SOP doesn't say which zone this is in. It has always been compared as UTC here, and
+    the worst case is a listing dropping or lingering a few hours around its expiry, so
+    that behaviour is kept rather than guessed at.
+    """
+    return as_utc(datetime.strptime(raw, "%Y-%m-%d %H:%M:%S"))
+
+
 def is_expired(record: dict, now: datetime | None = None) -> bool:
     exp_raw = (record.get("acf") or {}).get("_expiration-date")
     if not exp_raw:
         return False
-    return datetime.strptime(exp_raw, "%Y-%m-%d %H:%M:%S") < (now or datetime.utcnow())
+    return _parse_expiry(exp_raw) < (now or utc_now())
 
 
 def collapse_duplicates(records: list[dict]) -> list[dict]:
@@ -315,7 +326,7 @@ def build_club(record: dict, links: dict) -> Club:
     listing_expires = None
     exp_raw = acf.get("_expiration-date")
     if exp_raw:
-        listing_expires = datetime.strptime(exp_raw, "%Y-%m-%d %H:%M:%S")
+        listing_expires = _parse_expiry(exp_raw)
 
     return Club(
         sop_id=sop_id,
@@ -327,7 +338,7 @@ def build_club(record: dict, links: dict) -> Club:
         links=links,
         sop_url=record.get("link"),
         listing_expires=listing_expires,
-        last_updated=datetime.utcnow(),
+        last_updated=utc_now(),
         source="sop",
     )
 
@@ -376,7 +387,7 @@ def plan_sync(
     records = discover_groups(max_pages=max_pages)
     print(f"[sop_sync] discovered {len(records)} groups")
 
-    now = datetime.utcnow()
+    now = utc_now()
     live = [r for r in records if not is_expired(r, now)]
     print(f"[sop_sync] {len(records) - len(live)} expired listing(s) dropped")
 

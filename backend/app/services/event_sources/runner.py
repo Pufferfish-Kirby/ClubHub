@@ -26,7 +26,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from importlib import import_module
 
 from rapidfuzz import fuzz
@@ -34,13 +34,13 @@ from sqlmodel import Session, select
 
 from app.models import Event, IngestLog
 from app.services.event_sources.base import (
-    CAMPUS_TZ,
     ScrapedEvent,
     safe_console,
     scrub_contacts,
 )
 from app.services.extraction import decide_status
 from app.services.matcher import get_or_create_club
+from app.timeutil import utc_now
 
 # Adapters live in this package and are referred to by module name.
 _ADAPTER_PACKAGE = "app.services.event_sources"
@@ -239,7 +239,7 @@ def stage(
     against a live adapter without a database or a commit.
     """
     if now_utc is None:
-        now_utc = datetime.now(CAMPUS_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+        now_utc = utc_now()
 
     keep: list[ScrapedEvent] = []
     for event in events:

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     sop_campus: str = "St. George"
     sop_user_agent: str = "CampusCompass/0.1"
 
+    # IANA zone of the school, used to read poster/SOP wall-clock times. Times are
+    # *stored* as UTC regardless (see app/timeutil.py). An IANA name, not "EST":
+    # a fixed offset would be wrong for half the year.
+    school_timezone: str = "America/Toronto"
+
     database_url: str = "sqlite:///./data/campus_compass.db"
     chroma_persist_dir: str = "./data/chroma"
 

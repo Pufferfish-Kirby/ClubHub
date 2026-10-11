@@ -38,7 +38,7 @@ class IngestedEvent:
 
     id: str
     title: str
-    start: datetime | None  # naive UTC
+    start: datetime | None  # aware UTC
     location: str | None
     status: str
     dropbox_link: str | None

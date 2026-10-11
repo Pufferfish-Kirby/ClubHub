@@ -5,6 +5,8 @@ from typing import Optional
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
+from app.timeutil import utc_now
+
 
 def _uuid() -> str:
     return str(uuid.uuid4())
@@ -35,7 +37,7 @@ class Club(SQLModel, table=True):
     sop_url: Optional[str] = None
 
     listing_expires: Optional[datetime] = None
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=utc_now)
     source: str = "sop"  # sop | dropbox
 
 
@@ -64,7 +66,7 @@ class IngestLog(SQLModel, table=True):
     content_hash: Optional[str] = None  # prevents reprocessing the same file
     status: str = "pending"
     result_json: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
     # Scraped sources (app/services/event_sources/) have no Dropbox file to key
     # on, so they log against the adapter name plus a per-record key -- the

@@ -1,15 +1,21 @@
-fastapi
-python-multipart
-uvicorn[standard]
-sqlmodel
-chromadb
-voyageai
-anthropic
-dropbox
-rapidfuzz
-httpx
-python-dotenv
-pydantic-settings
-beautifulsoup4
-lxml
-tzdata
+# Pinned to the set the test suite passes on (Python 3.13). Unpinned, a fresh install can
+# resolve a different SQLModel than the one the code was written against, and a minor bump
+# there once broke datetime handling. To upgrade: bump deliberately, run the tests.
+fastapi==0.143.0
+starlette==1.7.0
+python-multipart==0.0.32
+uvicorn[standard]==0.54.0
+sqlmodel==0.0.48
+SQLAlchemy==2.0.54
+chromadb==1.5.9
+voyageai==0.5.0
+anthropic==1.13.0
+dropbox==12.2.3
+rapidfuzz==3.14.6
+httpx==0.28.1
+python-dotenv==1.2.4
+pydantic==2.14.0
+pydantic-settings==2.15.0
+beautifulsoup4==4.15.0
+lxml==6.1.3
+tzdata==2026.5

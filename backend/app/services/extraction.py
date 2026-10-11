@@ -20,15 +20,14 @@ pure function of the extracted fields, testable without a network call.
 
 import base64
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 import anthropic
 
 from app.config import settings
+from app.timeutil import CAMPUS_TZ, as_utc, local_to_utc
 
 MODEL = "claude-sonnet-5"
-CAMPUS_TZ = ZoneInfo("America/Toronto")
 
 # Auto-publish threshold. Below this an event still gets written, but as
 # pending_review, so it never reaches the live feed unreviewed.
@@ -240,7 +239,7 @@ def missing_fields(
 
 
 def to_utc(value: str | None) -> datetime | None:
-    """Naive local Toronto ISO string -> naive UTC datetime.
+    """Local campus-time ISO string -> timezone-aware UTC datetime.
 
     The prompt asks for wall-clock time with no offset, because a poster states
     wall-clock time and nothing else -- making the model also compute a UTC offset
@@ -261,9 +260,9 @@ def to_utc(value: str | None) -> datetime | None:
     if local.tzinfo is not None:
         # Model supplied an offset despite the instruction -- trust it rather than
         # double-applying a zone.
-        return local.astimezone(timezone.utc).replace(tzinfo=None)
+        return as_utc(local)
 
-    return local.replace(tzinfo=CAMPUS_TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    return local_to_utc(local)
 
 
 def _build_content_blocks(file_bytes: bytes, mime_type: str, prompt: str) -> list[dict]:
@@ -299,7 +298,7 @@ def _build_prompt(today: date) -> str:
     `uncertainties` is the other half: an event that admits it couldn't confirm the
     year is recoverable on stage, a confidently wrong one is not.
     """
-    return f"""Today is {today:%A, %B %d, %Y}. The timezone is America/Toronto.
+    return f"""Today is {today:%A, %B %d, %Y}. The timezone is {settings.school_timezone}.
 
 This file was shared by a student club at the University of Toronto. Extract any
 events and club details it advertises.

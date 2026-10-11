@@ -190,6 +190,12 @@ search with `embed_query()`. Changing model or dimensions means re-indexing ever
   as one graph.
 - **Dedupe before enrichment.** `copy-of-*` slugs are yearly re-listings; the dedupe
   key is `sop_original_id` (SOP's `_oasis_original`).
+- **Times are stored as timezone-aware UTC; the school's zone is only for reading and
+  showing them.** Use `app/timeutil.py` (`utc_now`, `as_utc`, `local_to_utc`,
+  `to_campus`); never `datetime.utcnow()` or `.replace(tzinfo=None)`. SQLModel 0.0.46+
+  rejects naive datetimes on write. The zone is the `SCHOOL_TIMEZONE` setting, an IANA
+  name (`America/Toronto`), never a fixed offset like EST: Toronto switches to daylight
+  time and an offset would put events from March to November an hour off.
 - **Filter campus by taxonomy slug** (`campus-st-george`), not `settings.sop_campus`.
   The title-cased label has no period and silently matches zero rows.
 - **Sample across interest areas** (`select_diverse()`), never "first N".
@@ -202,12 +208,10 @@ search with `embed_query()`. Changing model or dimensions means re-indexing ever
 
 ## Known state (update this when it changes)
 
-As of 2026-10-06:
+As of 2026-10-11:
 
-- **Backend tests fail on a fresh install (7 of 15).** `requirements.txt` is unpinned,
-  and newer SQLModel versions (0.0.46+) reject naive datetimes. The code still uses
-  `datetime.utcnow()` in `models.py`, `sop_sync.py` and `recommend.py`. Passes on
-  SQLModel 0.0.44. Production is at risk on its next redeploy for the same reason.
+- **Backend dependencies are pinned** in `requirements.txt` (SQLModel 0.0.48). Bump them
+  on purpose and run the tests; don't loosen the pins to ranges.
 - **Deployment belongs to a teammate** (Vercel frontend; `vercel.json` rewrites `/api`
   to a Render backend). The fork has no deployment of its own yet.
 - **Render's free tier has no persistent disk**, so SQLite and Chroma ship inside git

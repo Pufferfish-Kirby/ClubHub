@@ -7,7 +7,7 @@ different document is a new occurrence. See ingest._find_existing_event.
 No network: extraction, download and sharing are all stubbed.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -18,8 +18,8 @@ from app.models import Event
 from app.services.dropbox_store import InboxFile
 from app.services.extraction import ExtractedEvent, Extraction
 
-OCT16 = datetime(2026, 10, 16, 23, 30)
-OCT23 = datetime(2026, 10, 23, 23, 30)
+OCT16 = datetime(2026, 10, 16, 23, 30, tzinfo=timezone.utc)
+OCT23 = datetime(2026, 10, 23, 23, 30, tzinfo=timezone.utc)
 
 
 @pytest.fixture
