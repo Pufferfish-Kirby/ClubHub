@@ -370,6 +370,14 @@ failure mode — this is that risk, still unretired.
 ---
 
 ### O4. `POST /api/events/{id}/confirm` has no authentication
+**Status update (2026-10-12):** resolved for in-app uploads — James approved the token
+approach (no accounts). The upload response now carries a `confirm_token`
+(`HMAC(secret, event_id)`, `app/confirm_token.py`) for each pending event; confirm requires
+it, returns 404 on a bad token, 409 unless `pending_review`, and responds with
+`PublicEvent`. Still open: events from the unattended Dropbox watcher have no uploader to
+hand a token to, so they still need a review path (issue #2). The text below is the
+original note.
+
 Anyone who knows an event ID can overwrite its start time and publish it, and the
 response returns the raw `Event` row (including internal `confidence`). Found by the
 automated security review on the D13 change; the behavior predates it.

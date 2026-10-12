@@ -99,6 +99,8 @@ class UploadedEvent(BaseModel):
     # POST /events/{id}/confirm.
     missing: list[str] = []
     start_local: str | None = None
+    # Present only with `missing`: send it back to POST /events/{id}/confirm. See app/confirm_token.py.
+    confirm_token: str | None = None
 
 
 class UploadedClub(BaseModel):
