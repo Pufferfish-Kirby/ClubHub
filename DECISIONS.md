@@ -309,8 +309,8 @@ material:
   student's own outcomes for the graph, with both network calls pushed off the event
   loop (R1).
 - **Personal graph and club detail panel built and working** on the frontend —
-  24 commits on `frontend/sprint-6` (graph layout, panel, empty/error states) — though
-  not yet merged into `main` as of this session (O2 below).
+  24 commits on `frontend/sprint-6` (graph layout, panel, empty/error states). Merged
+  into `main` since (O2 below).
 
 ---
 
@@ -334,6 +334,10 @@ dedicated log entry of its own.
 ---
 
 ### O2. `frontend/sprint-6` was never merged into `main`
+**Status update (2026-10-12):** resolved — `main` now has `App.jsx`, `screens/`,
+`components/` and `lib/`, and the frontend builds. The original problem is kept below
+for history.
+
 `main`'s `frontend/src` currently has no `App.jsx` — it was removed in commit `458cd9d`
 ("deleted avi frontend"), but `main.jsx` still imports it, so `npm run dev` on `main`
 does not build right now. All the working frontend code (the graph, club detail panel,
@@ -347,6 +351,11 @@ they diverged.
 ---
 
 ### O3. Dropbox drop-to-update has never run end-to-end
+**Status update (2026-10-12):** mostly resolved — the live database now holds 13
+`Event` and 17 `IngestLog` rows, so the pipeline has run on real posters. Still open:
+the unattended Dropbox path has no review screen for an ambiguous date (the in-app
+upload has one). The text below is the original 2026-09-19 note.
+
 `Event` and `IngestLog` are both empty in the live database (verified 2026-09-19) — the
 pipeline (`dropbox_watcher` → `extraction` → `matcher` → `ingest`) is fully written but
 unproven. `POST /upload` (`routers/upload.py`) — a newer, undocumented endpoint that
@@ -380,6 +389,11 @@ for ~20 candidates, then Sonnet reranks to 5–8 with a "why it fits" line each,
 `next_event` per club for the graph's outer layer. Both network calls are pushed off the
 event loop with `asyncio.to_thread`, and an empty candidate list returns an empty
 response rather than a broken graph.
+
+**Tests (2026-10-12):** `backend/tests/test_recommend.py` covers the endpoint offline
+with Voyage/Chroma and Claude stubbed. It checks that hallucinated club ids are dropped,
+results are capped at `MAX_CLUBS`, and `next_event` only shows published, future events.
+Those guarantees live in code guards, not in the model's behavior.
 
 **Rationale not captured here** — worth a short entry from whoever wrote it, especially
 on how the student's `outcomes` are chosen for the graph's middle layer.

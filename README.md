@@ -175,7 +175,7 @@ isn't scaffolding. Concretely:
   UofT's official portal), **100% enriched** (summary, outcomes, tags, commitment) and
   embedded for search.
 - **`/recommend`** is live: vector search + Claude rerank, tested end to end against the
-  real database.
+  real database, plus offline unit tests that stub the model and vector calls.
 - **The constellation and Full Directory** are both built, sharing one soft-physics graph
   and one hover/highlight model between the graph, the cards, and the club detail panel.
 - **The Dropbox pipeline** (watcher, extraction, fuzzy club matching, confidence-gated
