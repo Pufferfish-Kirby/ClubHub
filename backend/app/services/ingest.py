@@ -72,6 +72,9 @@ class IngestResult:
     uncertainties: list[str] = field(default_factory=list)
     doc_type: str | None = None
     error: str | None = None
+    # Changes this file proposed to events already on the live feed. Not applied: each is an
+    # IngestLog row with status "held_change", waiting for a person (see _changes_live_facts).
+    held: int = 0
 
     @property
     def published_count(self) -> int:
@@ -210,6 +213,30 @@ def _title_key(title: str) -> str:
     return " ".join(re.sub(r"[^\w\s]", " ", title.lower()).split())
 
 
+def _live_facts(start, end, location) -> dict:
+    return {"start": start, "end": end, "location": location}
+
+
+def _changes_live_facts(event: Event, item: ExtractedEvent) -> bool:
+    """Would applying `item` change when or where an already-published event happens?
+
+    A poster can't prove it's genuine or correct: anyone with the inbox can drop one, and a
+    misread or fake "RESCHEDULED" would otherwise replace a right date on the feed with a wrong
+    one. A wrong date is worse than no date, so a live event's start, end and location never
+    change from a poster alone -- the change is held for a person and the old facts stay up.
+    A field the poster doesn't state (None) is not a change: a poster may fill a blank, never
+    erase one. Wording-only differences (title, description) still apply.
+    """
+    if event.status != "published":
+        return False  # nothing live to protect; a pending row is fair game
+    return (
+        (item.start is not None and item.start != event.start)
+        or (item.end is not None and item.end != event.end)
+        or (item.location is not None and (item.location or "").strip().casefold()
+            != (event.location or "").strip().casefold())
+    )
+
+
 def _log(session: Session, file: InboxFile, status: str, payload: dict) -> None:
     session.add(
         IngestLog(
@@ -282,6 +309,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
     written_items: list[ExtractedEvent] = []  # parallel to `written`, for missing/start_local in the snapshot
     claimed: set[str] = set()
     reschedules: list[str] = []
+    held = 0
     for item in extraction.events:
         existing = _find_existing_event(
             session,
@@ -297,19 +325,41 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
                 f"{item.title!r}: {existing.start} -> {item.start} "
                 f"(was {existing.source_file}, now {file.name})"
             )
+        if existing is not None and _changes_live_facts(existing, item):
+            _log(
+                session,
+                file,
+                "held_change",
+                {
+                    "event_id": existing.id,
+                    "title": item.title,
+                    "file": file.name,
+                    "dropbox_link": dropbox_link,
+                    "is_reschedule": item.is_reschedule,
+                    "current": _live_facts(existing.start, existing.end, existing.location),
+                    "proposed": _live_facts(item.start, item.end, item.location),
+                },
+            )
+            claimed.add(existing.id)
+            held += 1
+            continue
+
+        was_live = existing is not None and existing.status == "published"
         event = existing or Event(club_id=club.id, title=item.title)
 
         # Set on update too: a corrected poster may have reworded the title.
         event.title = item.title
         event.start = item.start
-        event.end = item.end
-        event.location = item.location
-        event.description = item.description
-        event.rsvp_url = item.rsvp_url
+        # A poster that doesn't mention a field leaves what we had (see _changes_live_facts).
+        event.end = item.end if item.end is not None else event.end
+        event.location = item.location if item.location is not None else event.location
+        event.description = item.description if item.description is not None else event.description
+        event.rsvp_url = item.rsvp_url if item.rsvp_url is not None else event.rsvp_url
         event.source = "dropbox"
         event.source_file = file.name
         event.dropbox_link = dropbox_link
-        event.status = item.status
+        # A blurrier copy of a live poster must not pull the event off the feed.
+        event.status = "published" if was_live else item.status
         event.confidence = extraction.confidence
 
         session.add(event)
@@ -330,6 +380,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
             "confidence": extraction.confidence,
             "uncertainties": extraction.uncertainties,
             "reschedules": reschedules,
+            "held": held,
         },
     )
 
@@ -356,6 +407,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
         confidence=extraction.confidence,
         uncertainties=extraction.uncertainties,
         doc_type=extraction.doc_type,
+        held=held,
     )
     session.commit()
     return snapshot
