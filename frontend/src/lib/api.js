@@ -76,9 +76,10 @@ export async function uploadFlier(file) {
  * to_utc() (datetime.fromisoformat) accepts both.
  * @param {string} eventId
  * @param {string} start
- * @returns {Promise<object>} the updated (now published) event row
+ * @param {string} token the event's `confirm_token` from the upload response
+ * @returns {Promise<object>} the updated (now published) public event
  */
-export async function confirmEvent(eventId, start) {
-  const { data } = await api.post(`/events/${encodeURIComponent(eventId)}/confirm`, { start })
+export async function confirmEvent(eventId, start, token) {
+  const { data } = await api.post(`/events/${encodeURIComponent(eventId)}/confirm`, { start, token })
   return data
 }

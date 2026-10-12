@@ -28,7 +28,7 @@ function ConfirmEventForm({ event, onConfirmed }) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await confirmEvent(event.id, needsDate ? value : `${knownDate}T${value}:00`)
+      const updated = await confirmEvent(event.id, needsDate ? value : `${knownDate}T${value}:00`, event.confirm_token)
       onConfirmed(event.id, updated)
     } catch (err) {
       setError(typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : "Couldn't save that.")

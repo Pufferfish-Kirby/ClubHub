@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # Host header allow-list, used only outside development. "*" disables the check.
     trusted_hosts: str = "*"
 
+    # Signs the one-time tokens that let an uploader confirm their own pending events
+    # (app/confirm_token.py). Empty = random per process, which is fine for one worker.
+    confirm_token_secret: str = ""
+
     # Rate limiting is per-process and in-memory (see app/security.py), which is
     # correct for one uvicorn worker. Turn it off for load testing, not casually:
     # /recommend spends a Voyage call plus a Sonnet call on every request.

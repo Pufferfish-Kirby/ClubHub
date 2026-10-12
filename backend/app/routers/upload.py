@@ -23,6 +23,7 @@ import logging
 from fastapi import APIRouter, HTTPException, UploadFile
 from sqlmodel import Session
 
+from app.confirm_token import make_confirm_token
 from app.database import engine
 from app.schemas import UploadedClub, UploadedEvent, UploadResponse
 from app.services.dropbox_store import MIME_TYPES, mime_type_for, upload_file
@@ -149,6 +150,9 @@ async def upload_flier(file: UploadFile) -> UploadResponse:
                 dropbox_link=e.dropbox_link,
                 missing=e.missing,
                 start_local=e.start_local,
+                confirm_token=(
+                    make_confirm_token(e.id) if e.status == "pending_review" else None
+                ),
             )
             for e in result.events
         ],
