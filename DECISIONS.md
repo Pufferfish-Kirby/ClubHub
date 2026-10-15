@@ -302,7 +302,7 @@ facts, file, Dropbox link). Events still in `pending_review` take the new facts 
 A field the poster doesn't mention never erases one we have, and a blurrier copy of a
 live poster can't pull it back to `pending_review`.
 
-**Not done yet:** a review page to approve or reject held changes (issue #2), and multiple
+**Not done yet:** a review page to approve or reject held changes (the Dropbox review path), and multiple
 dates per event (application deadline + event day). `IngestLog` was used so this needed
 no schema change; the review page may justify a proper table.
 
@@ -393,7 +393,7 @@ approach (no accounts). The upload response now carries a `confirm_token`
 (`HMAC(secret, event_id)`, `app/confirm_token.py`) for each pending event; confirm requires
 it, returns 404 on a bad token, 409 unless `pending_review`, and responds with
 `PublicEvent`. Still open: events from the unattended Dropbox watcher have no uploader to
-hand a token to, so they still need a review path (issue #2). The text below is the
+hand a token to, so they still need a review path. The text below is the
 original note.
 
 Anyone who knows an event ID can overwrite its start time and publish it, and the
