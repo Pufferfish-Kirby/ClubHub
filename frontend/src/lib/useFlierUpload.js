@@ -86,7 +86,7 @@ export function useFlierUpload({ resultClubIds, onPublished }) {
           setState({ phase: 'idle' })
           return
         }
-        setState({ phase: 'done', ok: published.length > 0, message: `Saved to Dropbox · ${res.message}` })
+        setState({ phase: 'done', ok: published.length > 0 || res.held > 0, message: `Saved to Dropbox · ${res.message}` })
       } catch (e) {
         setState({ phase: 'error', message: errorMessage(e) })
       }

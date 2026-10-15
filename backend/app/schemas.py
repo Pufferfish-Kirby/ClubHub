@@ -123,3 +123,5 @@ class UploadResponse(BaseModel):
     events: list[UploadedEvent] = []
     confidence: float | None = None
     uncertainties: list[str] = []
+    # Changes to events already live that were held for a person instead of applied.
+    held: int = 0

@@ -288,6 +288,24 @@ loosen to ranges. `pytest` stays out of the file (CI and the cloud setup script 
 **Rejected:** a lockfile (pip-tools/uv) for now. It would pin transitive packages too,
 but adds a tool and a workflow step; revisit if a transitive bump ever bites.
 
+## 2026-10-12 — Poster trust
+
+### D15. A poster never changes a live event's date or place on its own
+**Owner:** James. **Why:** anyone with the Dropbox inbox can drop a poster, the club is
+matched by the name printed on it, and "RESCHEDULED" can be misread or faked. Before this,
+a confident re-read replaced a live date immediately and kept no copy of the old one.
+
+**Rule (`ingest._changes_live_facts`):** if a poster matches an event that is already
+`published` and states a different start, end or location, nothing changes on the feed.
+The proposal is stored as an `IngestLog` row with status `held_change` (current vs proposed
+facts, file, Dropbox link). Events still in `pending_review` take the new facts as before.
+A field the poster doesn't mention never erases one we have, and a blurrier copy of a
+live poster can't pull it back to `pending_review`.
+
+**Not done yet:** a review page to approve or reject held changes (the Dropbox review path), and multiple
+dates per event (application deadline + event day). `IngestLog` was used so this needed
+no schema change; the review page may justify a proper table.
+
 ---
 
 ## Accomplishments (verified 2026-09-19)
@@ -375,7 +393,7 @@ approach (no accounts). The upload response now carries a `confirm_token`
 (`HMAC(secret, event_id)`, `app/confirm_token.py`) for each pending event; confirm requires
 it, returns 404 on a bad token, 409 unless `pending_review`, and responds with
 `PublicEvent`. Still open: events from the unattended Dropbox watcher have no uploader to
-hand a token to, so they still need a review path (issue #2). The text below is the
+hand a token to, so they still need a review path. The text below is the
 original note.
 
 Anyone who knows an event ID can overwrite its start time and publish it, and the
