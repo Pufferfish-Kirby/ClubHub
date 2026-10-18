@@ -221,6 +221,7 @@ As of 2026-10-11:
   restart or redeploy.
 - **Catalog covers 250 of 897** St. George clubs (sampled, 100% enriched).
 - `GET /api/clubs/{id}` returns `similar: []`; it's a TODO in `routers/clubs.py`.
-- Frontend main bundle is ~609 kB (Vite warns above 500 kB). Lint is clean (0 warnings).
+- First paint loads ~335 kB of JS; the graph screens (`Constellation`, `Directory`) and
+  `@xyflow/react` load on demand (`App.jsx`). Lint is clean (0 warnings).
 - No review screen for posters dropped straight into Dropbox with nobody there to
   confirm an ambiguous date (the in-app upload has one).
