@@ -407,6 +407,24 @@ with `hmac.compare_digest`, a `409` unless the event is `pending_review`, and a
 
 ---
 
+### O5. A believable fake poster can still put wrong facts on the feed
+**Raised by:** James, 2026-10-18. D15 only protects events that are already live. A poster
+that matches nothing (new file, no reschedule wording, or a title under the 85% match)
+becomes a new event, and if extraction is confident it publishes straight away. A
+poster can also say nothing about rescheduling and still be false. Confidence measures
+how legible the poster is, not whether it's true, so a well-made fake scores high. No
+check on the poster's content can catch this.
+
+**Direction (James):** if schools actually adopt this, posters come in through an admin
+page where trusted admins upload them, and automation runs behind that. Trust comes from
+who uploaded, not from what the poster says. Until then, a stopgap could be to hold every
+event from the unattended Dropbox watcher as `pending_review`.
+
+**Needs:** a decision on how the admin/review page is protected (a shared admin token or a
+link per club). This is on the ask-first list (auth).
+
+---
+
 ## Resolved elsewhere
 
 ### R1. `POST /recommend` — implemented
