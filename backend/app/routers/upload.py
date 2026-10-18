@@ -67,17 +67,25 @@ def _describe(result: IngestResult) -> str:
     published = result.published_count
     unconfirmed = len(result.events) - published
     club = result.club_name or "this club"
+    held_note = (
+        f" {result.held} change{'s' if result.held > 1 else ''} to an event already listed "
+        "will be checked before it goes live."
+        if result.held
+        else ""
+    )
+    if not result.events:
+        return held_note.strip()
 
     if published and not unconfirmed:
-        return f"Added {published} event{'s' if published > 1 else ''} for {club}."
+        return f"Added {published} event{'s' if published > 1 else ''} for {club}.{held_note}"
     if published and unconfirmed:
         return (
             f"Added {published} event{'s' if published > 1 else ''} for {club}. "
-            f"{unconfirmed} needs a quick confirmation below."
+            f"{unconfirmed} needs a quick confirmation below.{held_note}"
         )
     return (
         f"We found {len(result.events)} event{'s' if len(result.events) > 1 else ''} "
-        f"for {club}, but couldn't read every detail -- confirm the rest below."
+        f"for {club}, but couldn't read every detail -- confirm the rest below.{held_note}"
     )
 
 
@@ -158,4 +166,5 @@ async def upload_flier(file: UploadFile) -> UploadResponse:
         ],
         confidence=result.confidence,
         uncertainties=result.uncertainties,
+        held=result.held,
     )

@@ -177,6 +177,8 @@ search with `embed_query()`. Changing model or dimensions means re-indexing ever
   title + resolved start + time of day + high confidence (`services/extraction.py`).
   Everything else → `pending_review`. Always pass today's date and `America/Toronto`
   into the extraction prompt; never let the model guess an ambiguous year.
+- **A poster never moves a live event.** A changed start, end or location on a
+  `published` event is held as an `IngestLog` `held_change` row, not applied (D15).
 - **Never invent club facts.** Thin descriptions get "limited info" summaries.
   `commitment` is `unknown` for ~40% of clubs because the prompt forbids guessing it.
   Don't loosen that; the reranker judges intensity at query time.

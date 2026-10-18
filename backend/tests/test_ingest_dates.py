@@ -7,6 +7,7 @@ different document is a new occurrence. See ingest._find_existing_event.
 No network: extraction, download and sharing are all stubbed.
 """
 
+import json
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -14,7 +15,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 import app.services.ingest as ingest
-from app.models import Event
+from app.models import Event, IngestLog
 from app.services.dropbox_store import InboxFile
 from app.services.extraction import ExtractedEvent, Extraction
 
@@ -42,8 +43,8 @@ def _file(name: str, file_id: str, content_hash: str) -> InboxFile:
     )
 
 
-def _event(title: str, start: datetime, is_reschedule: bool = False) -> ExtractedEvent:
-    return ExtractedEvent(
+def _event(title: str, start: datetime, is_reschedule: bool = False, **overrides) -> ExtractedEvent:
+    fields = dict(
         title=title,
         start=start,
         end=None,
@@ -54,6 +55,7 @@ def _event(title: str, start: datetime, is_reschedule: bool = False) -> Extracte
         start_local=None,
         is_reschedule=is_reschedule,
     )
+    return ExtractedEvent(**{**fields, **overrides})
 
 
 def _ingest(session, file: InboxFile, events: list[ExtractedEvent]):
@@ -79,14 +81,21 @@ def _events(session) -> list[Event]:
     return session.exec(select(Event)).all()
 
 
-def test_corrected_poster_moves_the_date_instead_of_duplicating(session):
-    """Same file re-uploaded with a fixed date: one row, new date."""
+def _held(session) -> list[dict]:
+    rows = session.exec(select(IngestLog).where(IngestLog.status == "held_change")).all()
+    return [json.loads(r.result_json) for r in rows]
+
+
+def test_edited_poster_holds_a_new_date_instead_of_duplicating(session):
+    """Same file re-uploaded with a different date: still one row, and since that row is
+    live, the new date waits for a person rather than replacing it (see _changes_live_facts)."""
     _ingest(session, _file("poker.png", "id1", "h1"), [_event("Tournament Night", OCT16)])
-    _ingest(session, _file("poker.png", "id1", "h2"), [_event("Tournament Night", OCT23)])
+    result = _ingest(session, _file("poker.png", "id1", "h2"), [_event("Tournament Night", OCT23)])
 
     rows = _events(session)
     assert len(rows) == 1
-    assert rows[0].start == OCT23, "the stale date must not survive on the feed"
+    assert rows[0].start == OCT16, "an unreviewed poster must not move a live date"
+    assert result.held == 1
 
 
 def test_a_different_poster_is_a_new_occurrence(session):
@@ -115,7 +124,7 @@ def test_unchanged_poster_is_idempotent(session):
     assert len(_events(session)) == 1
 
 
-def test_a_correction_in_a_new_file_still_supersedes_when_the_poster_says_so(session):
+def test_a_correction_in_a_new_file_is_matched_and_held_when_the_poster_says_so(session):
     """The gap a plain provenance check can't close on its own.
 
     A club fixes a mistake by posting a brand new graphic rather than editing the
@@ -123,19 +132,24 @@ def test_a_correction_in_a_new_file_still_supersedes_when_the_poster_says_so(ses
     indistinguishable from a recurring weekly meetup by provenance alone. The
     poster saying "RESCHEDULED" (modelled here as is_reschedule=True, which is
     what extraction.py sets when the document itself uses that language) is what
-    tells the pipeline to update the old row instead of creating a second one.
+    ties it to the old row instead of creating a second one. The old row is live,
+    so the new date is held for review: "RESCHEDULED" is easy to misread or fake.
     """
     _ingest(session, _file("poker_v1.png", "id6", "h1"), [_event("Tournament Night", OCT16)])
-    _ingest(
+    result = _ingest(
         session,
         _file("poker_corrected.png", "id7", "h2"),  # a genuinely different file
         [_event("Tournament Night", OCT23, is_reschedule=True)],
     )
 
     rows = _events(session)
-    assert len(rows) == 1, "the reschedule signal should update the row, not add one"
-    assert rows[0].start == OCT23
-    assert rows[0].source_file == "poker_corrected.png"
+    assert len(rows) == 1, "the reschedule signal should match the row, not add one"
+    assert rows[0].start == OCT16 and rows[0].source_file == "poker_v1.png"
+    held = _held(session)
+    assert len(held) == 1 and result.held == 1
+    assert held[0]["event_id"] == rows[0].id
+    assert held[0]["proposed"]["start"].startswith("2026-10-23")
+    assert held[0]["is_reschedule"] is True
 
 
 def test_without_the_reschedule_signal_a_new_file_is_still_a_new_occurrence(session):
@@ -163,3 +177,45 @@ def test_reschedule_with_no_prior_event_just_creates_one(session):
     rows = _events(session)
     assert len(rows) == 1
     assert rows[0].start == OCT16
+
+
+def test_a_pending_event_still_takes_the_new_date(session):
+    """Holding protects what students can already see. A row still in pending_review is
+    not live, so a newer poster may fill it in as before."""
+    first = _event("Tournament Night", OCT16, status="pending_review")
+    _ingest(session, _file("poker.png", "id11", "h1"), [first])
+    _ingest(session, _file("poker.png", "id11", "h2"), [_event("Tournament Night", OCT23)])
+
+    rows = _events(session)
+    assert len(rows) == 1 and rows[0].start == OCT23 and rows[0].status == "published"
+    assert _held(session) == []
+
+
+def test_a_blurrier_copy_cannot_unpublish_a_live_event(session):
+    """Same date, but this read came back low-confidence: the event stays on the feed."""
+    _ingest(session, _file("poker.png", "id12", "h1"), [_event("Tournament Night", OCT16)])
+    blurry = _event("Tournament Night", OCT16, status="pending_review")
+    _ingest(session, _file("poker.png", "id12", "h2"), [blurry])
+
+    rows = _events(session)
+    assert len(rows) == 1 and rows[0].status == "published"
+
+
+def test_a_poster_without_a_location_does_not_erase_it(session):
+    first = _event("Tournament Night", OCT16, location="Hart House")
+    _ingest(session, _file("poker.png", "id13", "h1"), [first])
+    _ingest(session, _file("poker.png", "id13", "h2"), [_event("Tournament Night", OCT16)])
+
+    rows = _events(session)
+    assert rows[0].location == "Hart House"
+    assert _held(session) == []
+
+
+def test_a_new_location_on_a_live_event_is_held(session):
+    first = _event("Tournament Night", OCT16, location="Hart House")
+    _ingest(session, _file("poker.png", "id14", "h1"), [first])
+    moved = _event("Tournament Night", OCT16, location="Sidney Smith 2117")
+    _ingest(session, _file("poker.png", "id14", "h2"), [moved])
+
+    assert _events(session)[0].location == "Hart House"
+    assert _held(session)[0]["proposed"]["location"] == "Sidney Smith 2117"

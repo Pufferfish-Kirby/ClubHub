@@ -288,6 +288,24 @@ loosen to ranges. `pytest` stays out of the file (CI and the cloud setup script 
 **Rejected:** a lockfile (pip-tools/uv) for now. It would pin transitive packages too,
 but adds a tool and a workflow step; revisit if a transitive bump ever bites.
 
+## 2026-10-12 — Poster trust
+
+### D15. A poster never changes a live event's date or place on its own
+**Owner:** James. **Why:** anyone with the Dropbox inbox can drop a poster, the club is
+matched by the name printed on it, and "RESCHEDULED" can be misread or faked. Before this,
+a confident re-read replaced a live date immediately and kept no copy of the old one.
+
+**Rule (`ingest._changes_live_facts`):** if a poster matches an event that is already
+`published` and states a different start, end or location, nothing changes on the feed.
+The proposal is stored as an `IngestLog` row with status `held_change` (current vs proposed
+facts, file, Dropbox link). Events still in `pending_review` take the new facts as before.
+A field the poster doesn't mention never erases one we have, and a blurrier copy of a
+live poster can't pull it back to `pending_review`.
+
+**Not done yet:** a review page to approve or reject held changes (the Dropbox review path), and multiple
+dates per event (application deadline + event day). `IngestLog` was used so this needed
+no schema change; the review page may justify a proper table.
+
 ---
 
 ## Accomplishments (verified 2026-09-19)
@@ -375,7 +393,7 @@ approach (no accounts). The upload response now carries a `confirm_token`
 (`HMAC(secret, event_id)`, `app/confirm_token.py`) for each pending event; confirm requires
 it, returns 404 on a bad token, 409 unless `pending_review`, and responds with
 `PublicEvent`. Still open: events from the unattended Dropbox watcher have no uploader to
-hand a token to, so they still need a review path (issue #2). The text below is the
+hand a token to, so they still need a review path. The text below is the
 original note.
 
 Anyone who knows an event ID can overwrite its start time and publish it, and the
@@ -386,6 +404,24 @@ automated security review on the D13 change; the behavior predates it.
 per-upload token). Suggested shape: a one-time confirm token created at upload and checked
 with `hmac.compare_digest`, a `409` unless the event is `pending_review`, and a
 `PublicEvent` response.
+
+---
+
+### O5. A believable fake poster can still put wrong facts on the feed
+**Raised by:** James, 2026-10-18. D15 only protects events that are already live. A poster
+that matches nothing (new file, no reschedule wording, or a title under the 85% match)
+becomes a new event, and if extraction is confident it publishes straight away. A
+poster can also say nothing about rescheduling and still be false. Confidence measures
+how legible the poster is, not whether it's true, so a well-made fake scores high. No
+check on the poster's content can catch this.
+
+**Direction (James):** if schools actually adopt this, posters come in through an admin
+page where trusted admins upload them, and automation runs behind that. Trust comes from
+who uploaded, not from what the poster says. Until then, a stopgap could be to hold every
+event from the unattended Dropbox watcher as `pending_review`.
+
+**Needs:** a decision on how the admin/review page is protected (a shared admin token or a
+link per club). This is on the ask-first list (auth).
 
 ---
 
