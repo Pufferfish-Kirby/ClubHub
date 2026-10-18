@@ -182,9 +182,13 @@ export default function ClubPanel({
   // upcoming (so the tab still means something if it's opened by hand). Hidden entirely when there's no event at all.
   const eventForTab = events.find((e) => e.id === selectedEventId) ?? events[0] ?? null
   const [tab, setTab] = useState(selectedEventId ? 'event' : 'club')
-  useEffect(() => {
+  // Reset the tab when a different club or event is picked. Done during render rather than in an
+  // effect so the old tab never paints (react.dev: "adjusting some state when a prop changes").
+  const [tabFor, setTabFor] = useState({ clubId: club.id, eventId: selectedEventId })
+  if (tabFor.clubId !== club.id || tabFor.eventId !== selectedEventId) {
+    setTabFor({ clubId: club.id, eventId: selectedEventId })
     setTab(selectedEventId ? 'event' : 'club')
-  }, [selectedEventId, club.id])
+  }
 
   return (
     <aside
