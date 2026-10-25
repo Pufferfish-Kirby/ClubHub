@@ -23,7 +23,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import clubs, events, recommend, upload
+from app.routers import clubs, events, recommend, review, upload
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware
 from app.services import dropbox_watcher
 
@@ -90,6 +90,7 @@ app.include_router(recommend.router, prefix=API_PREFIX)
 app.include_router(clubs.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(upload.router, prefix=API_PREFIX)
+app.include_router(review.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

@@ -24,7 +24,7 @@ class Event:
     description: str | None = None
     rsvp_url: str | None = None
     source: str = "sop"  # sop | dropbox
-    status: str = "published"  # published | pending_review
+    status: str = "published"  # published | pending_review | discarded
 
 
 @dataclass

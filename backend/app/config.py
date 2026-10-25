@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Signs the one-time tokens that let an uploader confirm their own pending events
     # (app/confirm_token.py). Empty = random per process, which is fine for one worker.
     confirm_token_secret: str = ""
+    # Lets whoever holds it publish or discard pending Dropbox events (app/routers/review.py).
+    # Empty = the review endpoints don't exist. Use a long random value.
+    review_key: str = ""
 
     # Rate limiting is per-process and in-memory (see app/security.py), which is
     # correct for one uvicorn worker. Turn it off for load testing, not casually:

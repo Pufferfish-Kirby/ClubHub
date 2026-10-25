@@ -56,7 +56,7 @@ class Event(SQLModel, table=True):
     source_file: Optional[str] = None  # provenance
     dropbox_link: Optional[str] = None
 
-    status: str = "published"  # published | pending_review
+    status: str = "published"  # published | pending_review | discarded
     confidence: Optional[float] = None  # 0-1
 
 

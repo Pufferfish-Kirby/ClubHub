@@ -50,11 +50,20 @@ def confirm_event(
     # A bad token gets the same 404 as an unknown id, so ids can't be probed for existence.
     if not event or not valid_confirm_token(event_id, body.token):
         raise HTTPException(status_code=404, detail="Event not found")
+    return publish_pending(session, event, body.start)
+
+
+def require_pending(event: Event) -> None:
     # Only an event still waiting on a human may be changed: a published one is final.
     if event.status != "pending_review":
         raise HTTPException(status_code=409, detail="This event has already been confirmed.")
 
-    start = to_utc(body.start)
+
+def publish_pending(session: Session, event: Event, start_local: str) -> Event:
+    """Publish a pending event at the start a person typed. Shared by the uploader's confirm above
+    and the reviewer's publish (routers/review.py), so both enforce the same rules."""
+    require_pending(event)
+    start = to_utc(start_local)
     if start is None:
         raise HTTPException(status_code=400, detail="Couldn't read that date and time.")
 
