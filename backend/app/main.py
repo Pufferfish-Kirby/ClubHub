@@ -1,3 +1,18 @@
+r"""ClubHub API. Run it from backend/ (PowerShell):
+
+    .venv\Scripts\Activate.ps1
+    uvicorn app.main:app --reload --port 8000
+
+Keep port 8000: the frontend dev server (npm run dev, http://localhost:5173) forwards
+every /api request to localhost:8000 (frontend/vite.config.js).
+
+While it runs, the Dropbox watcher lists the inbox every 5 seconds. Posters it has already
+read are skipped (IngestLog, services/ingest.py:already_ingested); only new or edited files go
+to Claude. To turn the watcher off, e.g. for frontend-only work, run this first in the same window:
+
+    $env:DROPBOX_WATCHER_ENABLED = "0"
+"""
+
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -17,9 +32,10 @@ from app.services import dropbox_watcher
 async def lifespan(app: FastAPI):
     init_db()
 
-    # The watcher runs for the life of the app. Opt out via
-    # DROPBOX_WATCHER_ENABLED=0 so tests and frontend-only work don't burn Claude
-    # calls on every restart -- uvicorn --reload restarts on every file save.
+    # The watcher runs for the life of the app. A restart doesn't re-read old
+    # posters (IngestLog is in the DB), but any new poster in the inbox costs a
+    # Claude call and writes events. Opt out via DROPBOX_WATCHER_ENABLED=0 for
+    # tests and frontend-only work.
     watcher = None
     if settings.dropbox_watcher_enabled:
         watcher = asyncio.create_task(dropbox_watcher.watch())

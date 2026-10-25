@@ -99,7 +99,10 @@ or Dropbox credentials is James's job on his own machine.
   (`git config core.hooksPath .githooks` once per clone). Keys have leaked from this
   repo before.
 - `DROPBOX_WATCHER_ENABLED=0` is set for you in `.claude/settings.json`. Leave it off;
-  otherwise every reload re-scans the inbox and spends Claude calls.
+  otherwise it lists the inbox every 5 seconds, and any poster it hasn't seen yet costs
+  a Claude call and writes events into the checked-in DB. Posters already in `IngestLog`
+  are skipped, so a restart alone doesn't re-spend calls, except where the DB itself
+  resets (Render redeploys).
 
 ## Commands
 
