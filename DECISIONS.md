@@ -306,6 +306,23 @@ live poster can't pull it back to `pending_review`.
 dates per event (application deadline + event day). `IngestLog` was used so this needed
 no schema change; the review page may justify a proper table.
 
+## 2026-10-24 — Reviewing Dropbox posters
+
+### D16. A shared reviewer key unlocks the review queue for unattended Dropbox posters
+**Owner:** James. **Why:** an in-app upload is confirmed by its uploader with a per-event
+token (`confirm_token.py`), but a poster dropped straight into Dropbox has no uploader
+present, so its `pending_review` events had no way to ever publish. Chosen over a
+local-only script (can't reach the deployed DB) and emailing the club (needs
+notifications and an email service).
+
+**Rule (`routers/review.py`, page `?view=review`):** whoever holds `REVIEW_KEY` can list
+pending Dropbox events, publish one with a date and time they read off the poster, or
+discard it. Unset key = the endpoints answer 404. Discard sets status `discarded`; rows are
+never deleted. A poster stored at local midnight has a date but no time, so the page leaves
+the time blank instead of pre-filling 00:00.
+
+**Not done yet:** approving `held_change` rows (D15) from the same page.
+
 ---
 
 ## Accomplishments (verified 2026-09-19)
