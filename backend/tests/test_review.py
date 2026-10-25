@@ -97,6 +97,18 @@ def test_discard_hides_without_deleting(client, session):
     assert client.get("/api/review/pending", headers=KEY).json() == []
 
 
+def test_actions_are_logged_without_the_key(client, session, caplog):
+    published, discarded = _event(session), _event(session)
+    with caplog.at_level("INFO", logger="app.routers.review"):
+        client.post(
+            f"/api/review/{published.id}/publish", json={"start": "2026-11-05T19:00"}, headers=KEY
+        )
+        client.post(f"/api/review/{discarded.id}/discard", headers=KEY)
+    assert f"published {published.id}" in caplog.text
+    assert f"discarded {discarded.id}" in caplog.text
+    assert "test-key" not in caplog.text
+
+
 def test_published_events_cannot_be_changed_here(client, session):
     event = _event(session, status="published")
     publish = client.post(

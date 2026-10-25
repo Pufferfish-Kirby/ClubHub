@@ -7,6 +7,7 @@ key unset every route here answers 404, so a deploy that never sets it exposes n
 """
 
 import hmac
+import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel
@@ -18,6 +19,10 @@ from app.models import Club, Event
 from app.routers.events import publish_pending, require_pending
 from app.schemas import PublicEvent
 from app.timeutil import to_campus
+
+# One shared key means no reviewer identity, so these lines are the only record of what was
+# published or discarded, and when. Never log the key itself.
+logger = logging.getLogger(__name__)
 
 
 def require_reviewer(x_review_key: str = Header(default="")) -> None:
@@ -82,7 +87,9 @@ def publish(
     event_id: str, body: PublishRequest, session: Session = Depends(get_session)
 ) -> PublicEvent:
     """Same rules as the uploader's confirm: the reviewer read the poster and typed the start."""
-    return publish_pending(session, _pending_event(session, event_id), body.start)
+    event = publish_pending(session, _pending_event(session, event_id), body.start)
+    logger.info("review: published %s (%r) at %s", event.id, event.title, event.start.isoformat())
+    return event
 
 
 @router.post("/{event_id}/discard", status_code=204)
@@ -92,4 +99,5 @@ def discard(event_id: str, session: Session = Depends(get_session)) -> Response:
     event.status = "discarded"
     session.add(event)
     session.commit()
+    logger.info("review: discarded %s (%r)", event.id, event.title)
     return Response(status_code=204)
