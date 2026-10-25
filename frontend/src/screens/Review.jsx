@@ -24,9 +24,10 @@ function saveKey(key) {
 const detail = (err) => (typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : "Couldn't save that.")
 
 /** One pending event: check the poster, type the start, publish it or discard it. */
-function PendingRow({ event, reviewKey, onDone }) {
+function PendingRow({ event, reviewKey, onDone, onWrongKey }) {
   // A poster with a date but no time is stored at local midnight. Never pre-fill that as a time: one tap on Publish
-  // would put a midnight event on the feed. Make the reviewer type the time instead.
+  // would put a midnight event on the feed. Make the reviewer type the time instead. (Ingest knows the difference,
+  // extraction.has_time_component, but Event doesn't store it, so 00:00 is the only signal left here.)
   const [knownDate, knownTime] = event.start_local?.split('T') ?? ['', '']
   const [date, setDate] = useState(knownDate)
   const [time, setTime] = useState(knownTime === '00:00' ? '' : knownTime)
@@ -41,6 +42,11 @@ function PendingRow({ event, reviewKey, onDone }) {
       await fn()
       onDone(event.id)
     } catch (err) {
+      const status = err?.response?.status
+      // The key was changed on the server while this tab was open: back to the key form.
+      if (status === 401) return onWrongKey()
+      // Another reviewer already published or discarded it. It isn't waiting any more, so drop the row.
+      if (status === 409) return onDone(event.id)
       setError(detail(err))
       setBusy(false)
     }
@@ -150,6 +156,12 @@ export default function Review() {
     setDraft('')
   }
 
+  function signOut() {
+    saveKey('')
+    setKey('')
+    setResult({ key: null, events: null, error: 'That key is wrong.' })
+  }
+
   const loading = Boolean(key) && result.key !== key
   const events = result.key === key ? result.events : null
   const error = loading ? null : result.error
@@ -185,6 +197,7 @@ export default function Review() {
                 event={ev}
                 reviewKey={key}
                 onDone={(id) => setEvents((list) => list.filter((x) => x.id !== id))}
+                onWrongKey={signOut}
               />
             ))}
           </ul>
