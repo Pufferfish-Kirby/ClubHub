@@ -83,3 +83,27 @@ export async function confirmEvent(eventId, start, token) {
   const { data } = await api.post(`/events/${encodeURIComponent(eventId)}/confirm`, { start, token })
   return data
 }
+
+// Review queue (backend/app/routers/review.py): pending Dropbox events nobody was there to confirm. Every call carries
+// the reviewer key; the server answers 404 when review is turned off and 401 for a wrong key.
+const reviewHeaders = (key) => ({ headers: { 'X-Review-Key': key } })
+
+/**
+ * @param {string} key
+ * @returns {Promise<{ id: string, title: string, club_name: string, start_local: string | null,
+ *   location: string | null, source_file: string | null, dropbox_link: string | null }[]>}
+ */
+export async function getPendingReview(key) {
+  const { data } = await api.get('/review/pending', reviewHeaders(key))
+  return data
+}
+
+/** `start` is local Toronto wall-clock time, a datetime-local input's value as-is (see confirmEvent). */
+export async function publishReviewed(eventId, start, key) {
+  const { data } = await api.post(`/review/${encodeURIComponent(eventId)}/publish`, { start }, reviewHeaders(key))
+  return data
+}
+
+export async function discardReviewed(eventId, key) {
+  await api.post(`/review/${encodeURIComponent(eventId)}/discard`, null, reviewHeaders(key))
+}

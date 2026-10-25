@@ -16,6 +16,8 @@ const LandingBackground = lazy(() => import('@/components/LandingBackground'))
 const loadConstellation = () => import('@/screens/Constellation')
 const Constellation = lazy(loadConstellation)
 const Directory = lazy(() => import('@/screens/Directory'))
+// ?view=review: the reviewer's queue for Dropbox posters (screens/Review.jsx). Students never load it.
+const Review = lazy(() => import('@/screens/Review'))
 
 // Dev only: with ?previewData, open straight on the results screen. Remove after real data lands.
 const PREVIEW_DATA = import.meta.env.DEV && new URLSearchParams(window.location.search).has('previewData')
@@ -100,12 +102,11 @@ function MainFlow() {
 }
 
 function App() {
-  return VIEW === 'directory' ? (
+  if (VIEW !== 'directory' && VIEW !== 'review') return <MainFlow />
+  return (
     <Suspense fallback={<div className="min-h-svh bg-background" />}>
-      <Directory />
+      {VIEW === 'review' ? <Review /> : <Directory />}
     </Suspense>
-  ) : (
-    <MainFlow />
   )
 }
 

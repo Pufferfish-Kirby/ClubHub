@@ -223,5 +223,5 @@ As of 2026-10-11:
 - `GET /api/clubs/{id}` returns `similar: []`; it's a TODO in `routers/clubs.py`.
 - First paint loads ~335 kB of JS; the graph screens (`Constellation`, `Directory`) and
   `@xyflow/react` load on demand (`App.jsx`). Lint is clean (0 warnings).
-- No review screen for posters dropped straight into Dropbox with nobody there to
-  confirm an ambiguous date (the in-app upload has one).
+- Pending Dropbox events are reviewed at `?view=review` with `REVIEW_KEY` (D16). Held
+  changes to live events (D15) still have no review screen.
