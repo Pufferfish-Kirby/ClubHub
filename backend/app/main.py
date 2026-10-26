@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,6 +12,16 @@ from app.database import init_db
 from app.routers import clubs, events, recommend, review, upload
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware
 from app.services import dropbox_watcher
+
+# Uvicorn only sets up its own loggers. Without this, every logger.info() under app.* is
+# dropped (Python's fallback prints WARNING and up), including the review audit lines in
+# routers/review.py and the Dropbox watcher's progress.
+_app_logger = logging.getLogger("app")
+_app_logger.setLevel(logging.INFO)
+if not _app_logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    _app_logger.addHandler(_handler)
 
 
 @asynccontextmanager

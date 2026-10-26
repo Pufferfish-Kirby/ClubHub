@@ -1,5 +1,6 @@
 """/review is gated by REVIEW_KEY and only acts on pending Dropbox events."""
 
+import logging
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -107,6 +108,13 @@ def test_actions_are_logged_without_the_key(client, session, caplog):
     assert f"published {published.id}" in caplog.text
     assert f"discarded {discarded.id}" in caplog.text
     assert "test-key" not in caplog.text
+
+
+def test_review_log_lines_reach_the_server_log():
+    # caplog turns INFO on by itself, so the test above passes even when the running app drops these lines.
+    review_logger = logging.getLogger("app.routers.review")
+    assert review_logger.isEnabledFor(logging.INFO)
+    assert logging.getLogger("app").handlers
 
 
 def test_published_events_cannot_be_changed_here(client, session):
