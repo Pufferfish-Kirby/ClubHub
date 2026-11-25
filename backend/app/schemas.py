@@ -57,6 +57,19 @@ class PublicEvent(BaseModel):
     dropbox_link: str | None = None
 
 
+class ClubEvent(PublicEvent):
+    """An event as its own club sees it (GET /club/me): the public fields plus `status`, which a
+    student never needs but the club does, to know what's still waiting on a confirmation."""
+
+    status: str  # published | pending_review
+
+
+class ClubMe(BaseModel):
+    id: str
+    name: str
+    events: list[ClubEvent]
+
+
 class ClubMatch(BaseModel):
     id: str
     name: str

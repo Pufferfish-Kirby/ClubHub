@@ -300,7 +300,8 @@ a confident re-read replaced a live date immediately and kept no copy of the old
 The proposal is stored as an `IngestLog` row with status `held_change` (current vs proposed
 facts, file, Dropbox link). Events still in `pending_review` take the new facts as before.
 A field the poster doesn't mention never erases one we have, and a blurrier copy of a
-live poster can't pull it back to `pending_review`.
+live poster can't pull it back to `pending_review`. **Exception (D17):** a confident read
+uploaded by the club itself, logged in with its own key, is applied directly.
 
 **Not done yet:** a review page to approve or reject held changes (the Dropbox review path), and multiple
 dates per event (application deadline + event day). `IngestLog` was used so this needed
@@ -322,6 +323,45 @@ never deleted. A poster stored at local midnight has a date but no time, so the 
 the time blank instead of pre-filling 00:00.
 
 **Not done yet:** approving `held_change` rows (D15) from the same page.
+
+## 2026-11-25 — Club keys
+
+### D17. Each club logs in with its own key, and its own posters can correct its live events
+**Owner:** James. **Why:** D15 holds every change to a live event because a poster can't
+prove who sent it. That also blocks the one sender who should be able to fix a mistake: the
+club. A per-event code (from the 4a confirm token) was considered and rejected. It only
+covers one upload, and a stranger re-uploading a club's poster would be handed the code for
+that club's event. James chose a key per club because ClubHub will go out to clubs, and
+per-club authentication is the start of "trust comes from who uploaded" (O5).
+
+**Rule (`app/club_keys.py`, `routers/club.py`, `ingest.process_file(club_id=...)`):**
+- A key is `ck_` plus 256 random bits. Only its SHA-256 is stored, in the `ClubKey` table,
+  so the database never holds a usable key. A fast hash is enough because the key is
+  random, not a chosen password.
+- James issues and revokes keys with `python -m app.club_keys`, which shows a key once. A
+  club can hold several keys, and revoking one leaves the others working.
+- Requests send the key as `X-Club-Key`. There is no session or cookie. An unknown or
+  revoked key gets 401 before any Dropbox or Claude call.
+- `POST /club/upload` files the poster under the key's club, whatever name it prints, so no
+  fuzzy match and no placeholder club. A **confident** read (one that would auto-publish)
+  may then move that club's live events, and the facts it replaced are kept in the
+  IngestLog `owner_updates`. A shaky read is still held: the key proves who sent the
+  poster, not that the date was read right.
+- `GET /club/me` lists the club's own events, including pending ones.
+- Uploads without a key are unchanged (D15).
+
+**Tradeoffs:**
+- Keys live in `campus_compass.db`, so on Render's free tier they survive a redeploy only
+  if James issues them locally and commits the database. Publishing the hashes in git is
+  safe for 256-bit random keys.
+- Anyone holding a club's key acts as that club, and nothing records which exec used it.
+
+**Not done yet:**
+- The `?view=club` screen.
+- Letting a club confirm its own pending events.
+- An explicit "replace this event's poster" action, because `_find_existing_event` only
+  matches the same file or reschedule wording.
+- A picker for which stored poster version an event shows.
 
 ---
 
@@ -437,8 +477,9 @@ page where trusted admins upload them, and automation runs behind that. Trust co
 who uploaded, not from what the poster says. Until then, a stopgap could be to hold every
 event from the unattended Dropbox watcher as `pending_review`.
 
-**Needs:** a decision on how the admin/review page is protected (a shared admin token or a
-link per club). This is on the ask-first list (auth).
+**Decided (James, 2026-11-25):** a key per club (D17). Clubs logged in with their key are
+the trusted uploaders. **Still open:** posters from anyone without a key (in-app uploads and
+the Dropbox watcher) can still publish a confident fake for a brand-new event.
 
 ---
 

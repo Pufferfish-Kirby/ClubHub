@@ -60,6 +60,19 @@ class Event(SQLModel, table=True):
     confidence: Optional[float] = None  # 0-1
 
 
+class ClubKey(SQLModel, table=True):
+    """A club's login key (app/club_keys.py). Only the SHA-256 of the key is stored; the key itself
+    is shown once, when James issues it. A club may hold several (one per exec team, say), and
+    revoking one leaves the others working."""
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    club_id: str = Field(foreign_key="club.id", index=True)
+    key_hash: str = Field(unique=True, index=True)
+    label: Optional[str] = None  # who it was given to, e.g. "CSSU exec 2026-27"
+    created_at: datetime = Field(default_factory=utc_now)
+    revoked_at: Optional[datetime] = None
+
+
 class IngestLog(SQLModel, table=True):
     id: str = Field(default_factory=_uuid, primary_key=True)
     dropbox_file_id: str = Field(index=True)

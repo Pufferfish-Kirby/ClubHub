@@ -45,7 +45,7 @@ _MESSAGES = {
 }
 
 
-def _store_and_process(data: bytes, filename: str) -> IngestResult:
+def _store_and_process(data: bytes, filename: str, club_id: str | None = None) -> IngestResult:
     """Upload to Dropbox and run the pipeline. Synchronous, runs in a worker thread.
 
     Opens its own session rather than accepting one from the request: the work
@@ -54,7 +54,7 @@ def _store_and_process(data: bytes, filename: str) -> IngestResult:
     """
     inbox_file = upload_file(data, filename)
     with Session(engine) as session:
-        return process_file(session, inbox_file)
+        return process_file(session, inbox_file, club_id=club_id)
 
 
 def _describe(result: IngestResult) -> str:
@@ -73,6 +73,12 @@ def _describe(result: IngestResult) -> str:
         if result.held
         else ""
     )
+    updated_note = (
+        f" Updated {result.updated} event{'s' if result.updated > 1 else ''} already listed."
+        if result.updated
+        else ""
+    )
+    held_note = updated_note + held_note
     if not result.events:
         return held_note.strip()
 
@@ -92,6 +98,12 @@ def _describe(result: IngestResult) -> str:
 @router.post("/upload", response_model=UploadResponse)
 async def upload_flier(file: UploadFile) -> UploadResponse:
     """Accept a flier image or PDF, extract its events, and return what we found."""
+    return await handle_upload(file)
+
+
+async def handle_upload(file: UploadFile, club_id: str | None = None) -> UploadResponse:
+    """Shared by POST /upload (anyone) and POST /club/upload (a logged-in club, see
+    routers/club.py). `club_id` pins the club and lets its poster correct its own live events."""
     filename = (file.filename or "").strip()
     if not filename:
         raise HTTPException(status_code=400, detail="No filename provided.")
@@ -126,7 +138,7 @@ async def upload_flier(file: UploadFile) -> UploadResponse:
     # Dropbox upload + Claude extraction are both blocking and take seconds.
     # On the event loop they would stall every other request for the duration.
     try:
-        result = await asyncio.to_thread(_store_and_process, data, filename)
+        result = await asyncio.to_thread(_store_and_process, data, filename, club_id)
     except Exception as e:
         # Dropbox or Anthropic being unreachable is an upstream failure, not the
         # user's fault -- say so with the status code rather than a generic 500.
