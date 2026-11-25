@@ -45,6 +45,8 @@ ROUTE_BUDGETS: dict[str, tuple[Budget, ...]] = {
     "POST /api/recommend": ((10, 60), (100, 3600)),
     # Sonnet vision + a Dropbox upload + database writes.
     "POST /api/upload": ((5, 60), (30, 3600)),
+    # The same pipeline behind a club key: the key proves who, not that they won't loop it.
+    "POST /api/club/upload": ((5, 60), (30, 3600)),
     # Cheap, but it publishes an event, so it mutates what the demo shows.
     "POST /api/events": ((20, 60), (200, 3600)),
 }

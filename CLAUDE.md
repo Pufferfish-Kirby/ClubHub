@@ -91,7 +91,9 @@ or Dropbox credentials is James's job on his own machine.
   the checked-in database:
   `app.services.sop_sync`, `app.services.enrichment_batch`, and every service's
   `python -m app.services.<name>` smoke test (`dropbox_store`, `extraction`, `matcher`,
-  `ingest`, `dropbox_watcher`). These are **not** unit tests. If a task needs one, write
+  `ingest`, `dropbox_watcher`). The same goes for `python -m app.club_keys issue|revoke`.
+  It costs nothing, but it writes club keys into the checked-in DB, and that's James's
+  call. These are **not** unit tests. If a task needs one, write
   the code, then put the exact command for James in the PR under "How I verified it".
 - Unit tests must not touch the network. Stub external calls the way
   `tests/test_ingest_dates.py` does.
@@ -180,8 +182,13 @@ search with `embed_query()`. Changing model or dimensions means re-indexing ever
   title + resolved start + time of day + high confidence (`services/extraction.py`).
   Everything else → `pending_review`. Always pass today's date and `America/Toronto`
   into the extraction prompt; never let the model guess an ambiguous year.
-- **A poster never moves a live event.** A changed start, end or location on a
-  `published` event is held as an `IngestLog` `held_change` row, not applied (D15).
+- **A poster never moves a live event, unless the club sent it.** A changed start, end or
+  location on a `published` event is held as an `IngestLog` `held_change` row, not applied
+  (D15). The only exception is a confident read uploaded by that same club while logged
+  in with its own key (`POST /club/upload`, D17). The replaced facts are kept in
+  `owner_updates`.
+- **Club keys are stored only as SHA-256 hashes** (`ClubKey`, `app/club_keys.py`). Never
+  log, return or commit a raw key.
 - **Never invent club facts.** Thin descriptions get "limited info" summaries.
   `commitment` is `unknown` for ~40% of clubs because the prompt forbids guessing it.
   Don't loosen that; the reranker judges intensity at query time.
@@ -228,3 +235,6 @@ As of 2026-10-11:
   `@xyflow/react` load on demand (`App.jsx`). Lint is clean (0 warnings).
 - Pending Dropbox events are reviewed at `?view=review` with `REVIEW_KEY` (D16). Held
   changes to live events (D15) still have no review screen.
+- **Club keys exist in the backend only** (D17): `GET /api/club/me` and
+  `POST /api/club/upload`. James issues them locally with `python -m app.club_keys issue
+  <club>`, which writes `campus_compass.db`. There is no `?view=club` screen yet.

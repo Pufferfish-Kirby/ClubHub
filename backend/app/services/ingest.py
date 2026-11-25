@@ -19,6 +19,7 @@ the several seconds extraction takes.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -26,10 +27,12 @@ from datetime import datetime
 from rapidfuzz import fuzz
 from sqlmodel import Session, select
 
-from app.models import Event, IngestLog
+from app.models import Club, Event, IngestLog
 from app.services.dropbox_store import InboxFile, download_file, get_shared_link, mime_type_for
 from app.services.extraction import ExtractedEvent, ExtractionError, extract_file
 from app.services.matcher import get_or_create_club
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,9 @@ class IngestResult:
     # Changes this file proposed to events already on the live feed. Not applied: each is an
     # IngestLog row with status "held_change", waiting for a person (see _changes_live_facts).
     held: int = 0
+    # Live events this file corrected directly, because the club itself uploaded it with its key
+    # (D17). The facts they replaced are kept in the IngestLog payload's `owner_updates`.
+    updated: int = 0
 
     @property
     def published_count(self) -> int:
@@ -248,11 +254,17 @@ def _log(session: Session, file: InboxFile, status: str, payload: dict) -> None:
     )
 
 
-def process_file(session: Session, file: InboxFile, *, force: bool = False) -> IngestResult:
+def process_file(
+    session: Session, file: InboxFile, *, force: bool = False, club_id: str | None = None
+) -> IngestResult:
     """Run one Dropbox file through the whole pipeline and write the rows.
 
     `force` re-processes a file we've already seen -- useful when iterating on the
     prompt, and for re-running the demo without editing the poster.
+
+    `club_id` is set only when the club itself uploaded the file, logged in with its key
+    (routers/club.py). Then the file belongs to that club whatever name the poster prints, and
+    it may correct that club's live events instead of having the change held (D17).
 
     Commits on success. On a permanent failure it records an IngestLog row so the
     file isn't retried on every poll; transient failures (network, rate limits)
@@ -295,7 +307,10 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
             uncertainties=extraction.uncertainties,
         )
 
-    club, club_created = get_or_create_club(session, extraction.club_name_guess or file.name)
+    if club_id is not None:
+        club, club_created = session.get(Club, club_id), False
+    else:
+        club, club_created = get_or_create_club(session, extraction.club_name_guess or file.name)
 
     # Provenance: the link behind the "from Dropbox" badge. An extracted event is
     # only as trustworthy as the ability to click through to the source, so a
@@ -310,6 +325,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
     claimed: set[str] = set()
     reschedules: list[str] = []
     held = 0
+    owner_updates: list[dict] = []
     for item in extraction.events:
         existing = _find_existing_event(
             session,
@@ -325,7 +341,22 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
                 f"{item.title!r}: {existing.start} -> {item.start} "
                 f"(was {existing.source_file}, now {file.name})"
             )
-        if existing is not None and _changes_live_facts(existing, item):
+        changes_live = existing is not None and _changes_live_facts(existing, item)
+        # The club's own key proves who sent the poster, not that it was read right. Only a
+        # confident read (one that would auto-publish) may move a live event; anything shakier is
+        # held like any other change, since applying it would keep a half-read date live.
+        if changes_live and club_id is not None and item.status == "published":
+            # The club's own correction. Apply it, but keep what it replaced.
+            owner_updates.append(
+                {
+                    "event_id": existing.id,
+                    "previous": _live_facts(existing.start, existing.end, existing.location),
+                    "previous_file": existing.source_file,
+                    "previous_link": existing.dropbox_link,
+                }
+            )
+            logger.info("club %s updated live event %s from %s", club.id, existing.id, file.name)
+        elif changes_live:
             _log(
                 session,
                 file,
@@ -381,6 +412,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
             "uncertainties": extraction.uncertainties,
             "reschedules": reschedules,
             "held": held,
+            "owner_updates": owner_updates,
         },
     )
 
@@ -408,6 +440,7 @@ def process_file(session: Session, file: InboxFile, *, force: bool = False) -> I
         uncertainties=extraction.uncertainties,
         doc_type=extraction.doc_type,
         held=held,
+        updated=len(owner_updates),
     )
     session.commit()
     return snapshot
